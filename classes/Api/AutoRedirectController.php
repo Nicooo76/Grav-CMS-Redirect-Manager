@@ -27,7 +27,7 @@ use Psr\Http\Message\ServerRequestInterface;
  *
  *   GET  /redirects/pending               deleted pages waiting for a decision            api.redirects.read
  *   POST /redirects/pending/{id}/resolve  body {action: gone|parent|redirect|dismiss, target?}  api.redirects.manage
- *   GET  /redirects/badge                 {count} = unseen auto rules + pending decisions    api.redirects.read
+ *   GET  /redirects/badge                 {count} = unseen auto rules + pending decisions, null when 0    api.redirects.read
  *   POST /redirects/badge/seen            marks the auto rules as seen                       api.redirects.read
  */
 final class AutoRedirectController extends AbstractApiController
@@ -107,7 +107,7 @@ final class AutoRedirectController extends AbstractApiController
         $pending = $state->pendingCount();
         $count = $state->badgeCount($existing);
 
-        return ApiResponse::create(['count' => $count, 'unseen' => $count - $pending, 'pending' => $pending]);
+        return ApiResponse::create(['count' => $count > 0 ? $count : null, 'unseen' => $count - $pending, 'pending' => $pending]);
     }
 
     public function badgeSeen(ServerRequestInterface $request): ResponseInterface
@@ -116,7 +116,9 @@ final class AutoRedirectController extends AbstractApiController
         $state = $this->services()->autoState();
         $state->markSeen();
 
-        return ApiResponse::create(['count' => $state->badgeCount()]);
+        $count = $state->badgeCount();
+
+        return ApiResponse::create(['count' => $count > 0 ? $count : null]);
     }
 
     /**

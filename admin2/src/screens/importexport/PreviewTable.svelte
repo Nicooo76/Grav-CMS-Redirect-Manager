@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { importIssueText } from '../../lib/issue-text';
   import { ArrowRight, CircleX, Copy, TriangleAlert } from 'lucide-svelte';
   import Badge from '../../lib/ui/Badge.svelte';
   import MatchChip from '../../lib/ui/MatchChip.svelte';
@@ -50,10 +51,10 @@
           <td>{#if r.rule}<MatchChip type={r.rule.match_type} />{/if}</td>
           <td class="notes">
             {#each r.errors as e, i (i)}
-              <div class="note err"><CircleX size={14} aria-hidden="true" /><span><span class="sr-only">{t('IMPORTEXPORT.ISSUE_ERROR')}: </span>{e.message}</span></div>
+              <div class="note err"><CircleX size={14} aria-hidden="true" /><span><span class="sr-only">{t('IMPORTEXPORT.ISSUE_ERROR')}: </span>{importIssueText(e)}</span></div>
             {/each}
             {#each r.warnings as w, i (i)}
-              <div class="note warn"><TriangleAlert size={14} aria-hidden="true" /><span><span class="sr-only">{t('IMPORTEXPORT.ISSUE_WARNING')}: </span>{w.message}</span></div>
+              <div class="note warn"><TriangleAlert size={14} aria-hidden="true" /><span><span class="sr-only">{t('IMPORTEXPORT.ISSUE_WARNING')}: </span>{importIssueText(w)}</span></div>
             {/each}
             {#if r.duplicate_of}
               <div class="note dup">

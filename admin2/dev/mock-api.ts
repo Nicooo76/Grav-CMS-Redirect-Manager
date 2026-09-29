@@ -61,7 +61,7 @@ const num = (v: string | null, d: number) => (v !== null && v !== '' && Number.i
 const flag = (v: string | null) => v === '1' || v === 'true';
 
 export function installMockApi(options: MockOptions = {}): { reset(): void; state: MockState; uninstall(): void } {
-  const opts: ResolvedOptions = { rules: options.rules ?? 300, latency: options.latency ?? [60, 220], seed: options.seed ?? 1, failRate: options.failRate ?? 0 };
+  const opts: ResolvedOptions = { rules: options.rules ?? 300, latency: options.latency ?? [60, 220], seed: options.seed ?? 1, failRate: options.failRate ?? 0, readOnly: options.readOnly ?? false, defaultStatus: options.defaultStatus ?? 302 };
   const g = globalThis as unknown as Window & typeof globalThis;
   const realFetch = g.fetch.bind(g);
   const state: MockState = buildState(opts);
@@ -117,7 +117,7 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
   /** Field errors plus analysis (loop / chain / conflict) for a rule that is not stored yet. */
   function candidateIssues(rule: Rule): FieldIssue[] {
     const out: FieldIssue[] = validateFields(rule);
-    if (out.some((i) => i.code === 'invalid_regex' || i.code === 'invalid_pattern')) return out;
+    if (out.some((i) => i.code === 'regex_invalid')) return out;
     for (const i of analyseRule(rule, getIndex(), { now: Date.now(), dead: new Map() }).issues) out.push({ ...i, field: i.code === 'conflict' ? 'source' : 'target' });
     return out;
   }
@@ -168,7 +168,7 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
     list.sort((a, b) => (k(a) < k(b) ? -dir : k(a) > k(b) ? dir : 0) || b.priority - a.priority);
     const per = Math.min(10000, Math.max(1, num(q.get('per_page'), 25)));
     const page = Math.max(1, num(q.get('page'), 1));
-    return { data: list.slice((page - 1) * per, page * per), meta: { total: list.length, page, per_page: per, groups: state.groups, counts } };
+    return { data: list.slice((page - 1) * per, page * per), meta: { pagination: { page, per_page: per, total: list.length, total_pages: Math.max(1, Math.ceil(list.length / per)) }, total: list.length, page, per_page: per, groups: state.groups, counts } };
   });
 
   on('POST', '/redirects/rules', ({ body, query }) => {
@@ -246,7 +246,7 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
   on('PATCH', '/redirects/rules/:id', ({ params, body, headers }) => {
     const r = byId(params[0]!);
     const inm = headers.get('If-Match');
-    if (inm && inm !== '*' && inm !== etag(r)) throw new ApiError(412, 'Precondition Failed', 'Die Regel wurde inzwischen geändert.');
+    if (inm && inm !== '*' && inm !== etag(r)) throw new ApiError(409, 'Conflict', 'The rule was changed in the meantime.');
     const patch = fieldsOf(body);
     if (typeof patch.target === 'string' && patch.target_type === undefined && /^https?:\/\//i.test(patch.target) !== (r.target_type === 'url')) patch.target_type = /^https?:\/\//i.test(patch.target) ? 'url' : 'route';
     const merged = makeRule({ ...r, ...patch }, r.id, r.created_at ?? isoAtom(Date.now()));
@@ -406,14 +406,14 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
     if (!state.ignorePatterns.includes(pattern)) state.ignorePatterns.push(pattern);
     const before = state.notFound.length;
     if (body.purge) state.notFound = state.notFound.filter((n) => !globTest(pattern, n.path));
-    return { data: { pattern, removed: before - state.notFound.length, ignore_patterns: state.ignorePatterns } };
+    return { data: { pattern, patterns: state.ignorePatterns, purged: before - state.notFound.length } };
   });
 
   on('POST', '/redirects/404/resolve', ({ body }) => {
     const paths = new Set<string>(Array.isArray(body.paths) ? body.paths : []);
     let n = 0;
     for (const g2 of state.notFound) if (paths.has(g2.path)) { g2.resolved = body.resolved !== false; n++; }
-    return { data: { updated: n } };
+    return { data: { resolved: n } };
   });
 
   on('DELETE', '/redirects/404', ({ query, body }) => {
@@ -431,7 +431,7 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
     return s;
   };
   const acceptSuggestion = (s: StoredSuggestion, over: { target?: string; status?: number } = {}): Rule => {
-    const rule = insert({ source: s.path, target: over.target ?? s.target, status: (over.status ?? 301) as Rule['status'], origin: 'suggestion', });
+    const rule = insert({ source: s.path, target: over.target ?? s.target, status: (over.status ?? opts.defaultStatus) as Rule['status'], origin: 'suggestion', });
     s.status = 'accepted';
     if (over.target) s.target = over.target;
     return rule;
@@ -447,28 +447,38 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
     const st = q.get('status');
     const min = num(q.get('min_score'), 0);
     const src = q.get('source');
-    const list = state.suggestions.filter((s) => (!st || s.status === st) && s.score >= min && (!src || s.source === src)).sort((a, b) => b.score - a.score || b.hits - a.hits);
-    return { data: list, meta: { total: list.length } };
+    const inScope = state.suggestions.filter((s) => s.score >= min && (!src || s.source === src));
+    const counts = { open: 0, accepted: 0, rejected: 0 };
+    for (const s of inScope) counts[s.status]++;
+    // like the real API: no status means "open"; "all" lists every state
+    const want = st ?? 'open';
+    const list = inScope.filter((s) => want === 'all' || s.status === want).sort((a, b) => b.score - a.score || b.hits - a.hits);
+    return { data: list, meta: { total: list.length, counts, bulk_accept_score: 0.9 } };
   });
 
   on('POST', '/redirects/suggestions/generate', () => {
     let created = 0;
-    let updated = 0;
+    let improved = 0;
+    let noSuggestion = 0;
+    let withRule = 0;
+    let paths = 0;
     const keys = getRuleKeys();
     for (const n of state.notFound) {
-      if (n.resolved || keys.has(pageKey(n.path))) continue;
+      if (n.resolved) continue;
+      paths++;
+      if (keys.has(pageKey(n.path))) { withRule++; continue; }
       const best = suggest(state.pages, n.path, 1)[0];
-      if (!best) continue;
+      if (!best) { noSuggestion++; continue; }
       const cur = state.suggestions.find((s) => s.path === n.path);
       if (!cur) {
-        state.suggestions.push({ id: 'sg' + newId().slice(-8), path: n.path, target: best.target, score: best.score, reason: best.reason, page_title: best.page_title, hits: hitsOf(n), status: 'open', source: 'auto', created_at: isoAtom(Date.now()) });
+        state.suggestions.push({ id: 'sg' + newId().slice(-8), path: n.path, target: best.target, score: best.score, reason: best.reason, page_title: best.page_title, hits: hitsOf(n), status: 'open', source: '404', created_at: isoAtom(Date.now()) });
         created++;
       } else if (cur.status === 'open' && (best.score > cur.score || cur.hits !== hitsOf(n))) {
         Object.assign(cur, { target: best.target, score: Math.max(cur.score, best.score), reason: best.reason, page_title: best.page_title, hits: hitsOf(n) });
-        updated++;
+        improved++;
       }
     }
-    return { data: { created, updated, total_open: state.suggestions.filter((s) => s.status === 'open').length } };
+    return { data: { paths, suggested: created + improved, created, improved, rejected_before: 0, no_suggestion: noSuggestion, skipped_with_rule: withRule } };
   });
 
   on('POST', '/redirects/suggestions/bulk-accept', ({ body }) => {
@@ -478,7 +488,7 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
     if (body.dry_run) return { data: { min_score: min, count: rows.length, rows } };
     const rules = rows.map((s) => acceptSuggestion(s));
     recompute();
-    return { data: { created: rules.length, rules } };
+    return { data: { min_score: min, count: rules.length, rows, rules, skipped: [] } };
   });
 
   on('POST', '/redirects/suggestions/:id/accept', ({ params, body }) => {
@@ -497,7 +507,7 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
   /* ---- import / export ---- */
   const dupKey = (r: Pick<Rule, 'match_type' | 'source'>) => `${r.match_type}|${r.match_type === 'exact' ? pageKey(r.source.split('?')[0]!) + (r.source.includes('?') ? '?' + r.source.split('?')[1] : '') : r.source.toLowerCase()}`;
   const importIssue = (i: FieldIssue): ImportIssue => ({
-    code: ({ target_empty: 'missing_target', source_empty: 'missing_source' } as Record<string, string>)[i.code] ?? i.code,
+    code: ({ target_required: 'missing_target', source_empty: 'missing_source', regex_invalid: 'invalid_regex' } as Record<string, string>)[i.code] ?? i.code,
     message: i.message, ...(i.params ? { params: i.params } : {}),
   });
 
@@ -595,8 +605,10 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
     if (!FORMATS.some((f) => f.id === format && f.export)) throw new ApiError(422, 'Unprocessable Entity', `Export im Format "${format}" wird nicht unterstützt.`, [{ field: 'format', code: 'invalid_format', message: 'Format nicht unterstützt.', severity: 'error' }]);
     const host = q.get('host');
     const st = num(q.get('status'), 0);
-    const rules = getSorted().filter((r) => (!flag(q.get('only_enabled')) || r.enabled) && (!q.get('group') || r.group === q.get('group')) && (!st || r.status === st) && (!host || !r.conditions.hosts.length || r.conditions.hosts.includes(host)));
-    return { data: exportRules(rules, format, host ?? 'example.test') };
+    const ids = q.get('ids') === null || q.get('ids')!.trim() === '' ? null : new Set(q.get('ids')!.split(',').map((x) => x.trim()).filter(Boolean));
+    const rules = getSorted().filter((r) => (!ids || ids.has(r.id)) && (!flag(q.get('only_enabled')) || r.enabled) && (!q.get('group') || r.group === q.get('group')) && (!st || r.status === st) && (!host || !r.conditions.hosts.length || r.conditions.hosts.includes(host)));
+    const out = exportRules(rules, format, host ?? 'example.test');
+    return { data: { ...out, lossy: [], exported: rules.length - (Array.isArray(out.skipped) ? out.skipped.length : 0) } };
   });
 
   on('GET', '/redirects/site-config', () => ({ data: state.siteConfig }));
@@ -633,7 +645,7 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
       open_suggestions: state.suggestions.filter((s) => s.status === 'open').length,
       dead_targets: state.rules.filter((r) => r.badges?.includes('dead_target')).length, pending_deletes: state.pending.length,
     };
-    return { data: stats };
+    return { data: stats, meta: { permissions: { read: true, manage: !opts.readOnly }, default_status: opts.defaultStatus } };
   });
 
   on('GET', '/redirects/checks', () => ({ data: state.checks }));
@@ -645,7 +657,7 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
     const ids: string[] | null = Array.isArray(body.ids) && body.ids.length ? body.ids : null;
     const fresh: CheckResult[] = buildChecks(netRng, state.rules, state.dead, ids, Date.now());
     state.checks = { last_run: isoAtom(Date.now()), results: ids ? [...state.checks.results.filter((r) => !ids.includes(r.rule_id)), ...fresh] : fresh };
-    return { data: state.checks };
+    return { data: { ...state.checks, checked: fresh.length, dead: fresh.filter((c) => !c.ok).length } };
   });
 
   on('GET', '/redirects/pages', ({ query: q }) => {
@@ -655,22 +667,39 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
     return { data: list.slice(0, Math.min(100, num(q.get('limit'), 20))) };
   });
 
-  on('GET', '/redirects/pending', () => ({ data: state.pending }));
+  on('GET', '/redirects/pending', () => ({ data: state.pending, meta: { total: state.pending.length } }));
+
+  const badgeNow = () => {
+    const unseen = state.unseen.filter((id) => state.rules.some((r) => r.id === id)).length;
+    const pending = state.pending.length;
+    // like the real API: null when there is nothing to show (Admin 2 hides the pill only for a missing value)
+    return { count: unseen + pending || null, unseen, pending };
+  };
+  on('GET', '/redirects/badge', () => ({ data: badgeNow() }));
+  on('POST', '/redirects/badge/seen', () => {
+    state.unseen = [];
+    return { data: { count: badgeNow().count } };
+  });
 
   on('POST', '/redirects/pending/:id/resolve', ({ params, body }) => {
     const p = state.pending.find((x) => x.id === params[0]);
-    if (!p) throw new ApiError(404, 'Not Found', `Eintrag ${params[0]} existiert nicht.`);
+    if (!p) throw new ApiError(404, 'Not Found', 'No pending decision with this id.');
     const action = String(body.action);
-    let rule: Rule | null = null;
-    if (action === 'gone') rule = insert({ source: p.route, target: '', status: 410, note: 'Seite gelöscht' });
-    else if (action === 'parent') rule = insert({ source: p.route, target: p.route.replace(/\/[^/]*$/, '') || '/', status: 301, target_type: 'page', note: 'Seite gelöscht' });
-    else if (action === 'redirect') {
-      if (!body.target) throw new ApiError(422, 'Unprocessable Entity', 'target ist erforderlich.', [{ field: 'target', code: 'target_empty', message: 'target ist erforderlich.', severity: 'error' }]);
-      rule = insert({ source: p.route, target: String(body.target), status: 301, note: 'Seite gelöscht' });
-    } else if (action !== 'dismiss') throw new ApiError(422, 'Unprocessable Entity', 'Unbekannte Aktion.', [{ field: 'action', code: 'invalid_action', message: 'Unbekannte Aktion.', severity: 'error' }]);
+    if (!['gone', 'parent', 'redirect', 'dismiss'].includes(action)) throw new ApiError(422, 'Unprocessable Entity', 'The action must be gone, parent, redirect or dismiss.', [{ field: 'action', code: 'action_invalid', message: 'Use gone, parent, redirect or dismiss.', severity: 'error' }]);
+    const created: Rule[] = [];
+    if (action === 'redirect' && !/^(\/(?!\/)|https?:\/\/)\S*/.test(String(body.target ?? ''))) throw new ApiError(422, 'Unprocessable Entity', 'A redirect needs a target: a route such as /new-page or an absolute URL.', [{ field: 'target', code: 'target_required', message: 'Enter a route starting with / or an http(s) URL.', severity: 'error' }]);
+    if (action !== 'dismiss') {
+      const routes = [p.route];
+      const base = { origin: 'auto' as const, note: '' };
+      if (action === 'gone') created.push(insert({ ...base, source: p.route, target: '', status: 410, note: 'Page deleted' }, 'auto'));
+      else if (action === 'parent') created.push(insert({ ...base, source: p.route, target: p.suggested_parent ?? '/', status: 301, target_type: 'page', note: 'Page deleted' }, 'auto'));
+      else created.push(insert({ ...base, source: p.route, target: String(body.target), status: 301, note: 'Page deleted' }, 'auto'));
+      void routes;
+      state.unseen.push(...created.map((r) => r.id));
+    }
     state.pending = state.pending.filter((x) => x !== p);
-    if (rule) recompute();
-    return { data: { id: p.id, action, rule } };
+    if (created.length) recompute();
+    return { data: { id: p.id, action, created, updated: [], deleted: [], notes: [] } };
   });
 
   /* ---- sitemap (async: base64 + gzip) ---- */
@@ -757,6 +786,9 @@ export function installMockApi(options: MockOptions = {}): { reset(): void; stat
       }
     }
     const r: Req = { method, path: rest, params: [], query: url.searchParams, body, headers };
+    // permission model of the real API: everything but these POSTs (they only read) needs api.redirects.manage
+    const READ_POSTS = /^\/redirects\/(rules\/validate|test|badge\/seen)\/?$/;
+    if (opts.readOnly && method !== 'GET' && !READ_POSTS.test(rest)) return problem(403, 'Forbidden', 'Missing required permission: api.redirects.manage');
     try {
       let res: Res | null = null;
       for (const [re, h] of asyncRoutes) if (method === 'POST' && re.test(rest)) { res = await h(r); break; }

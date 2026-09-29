@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { importIssueText } from '../../lib/issue-text';
   import { CircleX, Info, TriangleAlert } from 'lucide-svelte';
   import Segmented from '../../lib/ui/Segmented.svelte';
   import PreviewTable from './PreviewTable.svelte';
@@ -50,13 +51,13 @@
   {#each preview.errors as e, i (i)}
     <div class="banner bad" role="alert">
       <CircleX size={16} />
-      <div class="b-body">{e.message}</div>
+      <div class="b-body">{importIssueText(e)}</div>
     </div>
   {/each}
   {#each preview.warnings as w, i (i)}
     <div class="banner warn">
       <TriangleAlert size={16} />
-      <div class="b-body">{w.message}</div>
+      <div class="b-body">{importIssueText(w)}</div>
     </div>
   {/each}
   {#if notFound > 0}

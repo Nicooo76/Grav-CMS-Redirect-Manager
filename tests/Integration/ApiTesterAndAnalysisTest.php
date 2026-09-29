@@ -215,6 +215,16 @@ final class ApiTesterAndAnalysisTest extends ApiTestCase
         self::assertTrue($this->test(['url' => '/en/about'])['page_exists']);
     }
 
+    public function testPageExistsCoversPagesThatExistOnlyInAnotherLanguage(): void
+    {
+        $this->site()->writeSystemConfig(['languages' => ['supported' => ['en', 'de'], 'default_lang' => 'en', 'include_default_lang' => true]]);
+        $this->site()->writePage('about', 'About', 'x', 'en', '10');
+        $this->site()->writePage('nur-de', 'Nur Deutsch', 'x', 'de', '20');
+        self::assertTrue($this->test(['url' => '/de/nur-de'])['page_exists']);
+        self::assertTrue($this->test(['url' => '/nur-de', 'language' => 'de'])['page_exists']);
+        self::assertFalse($this->test(['url' => '/de/gibt-es-nicht'])['page_exists']);
+    }
+
     public function testLanguagePrefixMatchesWhatTheFrontendDoes(): void
     {
         $this->site()->writeSystemConfig(['languages' => ['supported' => ['en', 'de'], 'default_lang' => 'en', 'include_default_lang' => true]]);

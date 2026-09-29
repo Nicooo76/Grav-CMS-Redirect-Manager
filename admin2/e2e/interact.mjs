@@ -264,6 +264,9 @@ const rowIds = (page) => rows(page).evaluateAll((els) => els.map((e) => e.datase
   const a = await rowIds(page);
   check('ArrowDown on the handle moves the row down', a[2] === ids[1] && a[1] === ids[2], a.slice(0, 4).join(','));
   check('handle keeps focus after the move', await page.evaluate(() => document.querySelector('grav-redirect-manager--page').shadowRoot.activeElement?.classList.contains('drag')));
+  // the panels above the table push it down: bring the rows into the middle of the viewport before dragging
+  await rows(page).nth(4).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(200);
   const box = await rows(page).nth(2).locator('.drag').boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();

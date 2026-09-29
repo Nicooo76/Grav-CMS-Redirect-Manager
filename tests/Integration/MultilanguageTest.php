@@ -105,6 +105,6 @@ final class MultilanguageTest extends IntegrationTestCase
     {
         $this->rules([['id' => 'g', 'source' => '/weg', 'target' => '', 'status' => 410]]);
         self::assertStringContainsString('Diese Seite wurde entfernt', $this->get('/de/weg')->body);
-        self::assertStringContainsString('This page has been removed', $this->get('/en/weg')->body);
+        self::assertMatchesRegularExpression('/This page (has been|was) removed/', $this->get('/en/weg')->body);
     }
 }

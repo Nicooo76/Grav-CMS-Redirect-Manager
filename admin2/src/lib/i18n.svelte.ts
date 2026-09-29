@@ -34,6 +34,12 @@ export function t(key: string, params?: Params): string {
   return translator.t(key, params);
 }
 
+/** Host-only text (server-provided dictionary entries such as issue codes); undefined when missing. */
+export function tHost(fullKey: string, params?: Params): string | undefined {
+  void version;
+  return translator.hostText(fullKey, params);
+}
+
 export function locale(): string {
   void version;
   return translator.locale();

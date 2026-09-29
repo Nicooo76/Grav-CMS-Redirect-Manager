@@ -29,6 +29,7 @@ const en: Record<string, string> = {
   'COMMON.SAVE': 'Save',
   'COMMON.DELETE': 'Delete',
   'COMMON.EDIT': 'Edit',
+  'COMMON.VIEW': 'View',
   'COMMON.RETRY': 'Try again',
   'COMMON.APPLY': 'Apply',
   'COMMON.RESET': 'Reset',

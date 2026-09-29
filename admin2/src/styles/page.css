@@ -302,7 +302,8 @@ input[type='datetime-local'] {
   text-decoration: none;
 }
 .tab[aria-current='page'] {
-  color: var(--primary);
+  /* the host's dark-mode primary is 4.4:1 on the card: mix in a little foreground for text */
+  color: light-dark(var(--primary), color-mix(in oklab, var(--primary) 88%, var(--foreground, #fff)));
 }
 .tab[aria-current='page']::after {
   content: '';

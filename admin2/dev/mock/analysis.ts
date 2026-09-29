@@ -83,11 +83,11 @@ export function analyseRule(rule: Rule, idx: RuleIndex, ctx: AnalysisCtx): { bad
     const { chain, loop } = follow(rule, idx);
     if (loop) {
       badges.push('loop');
-      issues.push({ code: 'loop', severity: 'error', message: `Weiterleitungsschleife: ${chain.join(' → ')}`, params: { chain } });
+      issues.push({ code: 'loop', severity: 'error', field: 'target', message: `Redirect loop: ${chain.join(' -> ')}.`, params: { chain, rule_ids: [rule.id], hops: chain.length - 1, cycle: [rule.id] } });
     } else if (chain.length > 2) {
       badges.push('chain');
       const shortcut = chain[chain.length - 1]!;
-      issues.push({ code: 'chain', severity: 'warning', message: `Kette über ${chain.length - 1} Weiterleitungen: ${chain.join(' → ')}. Direkt auf ${shortcut} zeigen.`, params: { chain, shortcut } });
+      issues.push({ code: 'chain', severity: 'warning', field: 'target', message: `Redirect chain of ${chain.length - 1} hops: ${chain.join(' -> ')}. Point this rule at ${shortcut} directly.`, params: { chain, rule_ids: [], hops: chain.length - 1, shortcut, shortcut_status: null } });
     }
   }
 
@@ -96,12 +96,12 @@ export function analyseRule(rule: Rule, idx: RuleIndex, ctx: AnalysisCtx): { bad
     const other = group?.filter((o) => o.id !== rule.id && overlap(rule, o)).sort((a, b) => b.priority - a.priority)[0];
     if (other) {
       badges.push('conflict');
-      issues.push({ code: 'conflict', severity: 'warning', message: `Gleiche Quelle wie Regel ${other.id} (${other.source}); nur eine der beiden greift.`, params: { other_id: other.id, other_source: other.source } });
+      issues.push({ code: 'conflict', severity: 'warning', field: 'source', message: `Other rules match the same requests with a different target: ${other.id}. Only the highest-ranked one applies.`, params: { rule_ids: [other.id] } });
     }
     const dead = ctx.dead.get(rule.id);
     if (dead !== undefined) {
       badges.push('dead_target');
-      issues.push({ code: 'dead_target', severity: 'warning', message: dead ? `Ziel antwortet mit ${dead} (letzter Live-Check).` : 'Ziel antwortet nicht (Timeout im letzten Live-Check).', params: { status: dead } });
+      issues.push({ code: 'dead_target', severity: 'warning', field: 'target', message: dead ? `The target answers with ${dead} (last live check).` : 'The target does not answer (timeout in the last live check).', params: { status: dead } });
     }
   }
 

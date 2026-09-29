@@ -116,6 +116,8 @@ function parseOptions(body: string): Record<string, string> {
 
 export interface Translator {
   t(key: string, params?: Params): string;
+  /** Text from the host dictionary only (no English fallback shipped in the bundle), undefined when the host has none. Takes the full key. */
+  hostText(fullKey: string, params?: Params): string | undefined;
   has(key: string): boolean;
   locale(): string;
   dir(): 'ltr' | 'rtl';
@@ -145,6 +147,15 @@ export function createTranslator(
       if (raw === undefined) raw = fallback[key];
       if (raw === undefined) return key;
       return formatMessage(raw, params ?? {}, locale);
+    },
+    hostText(full, params) {
+      const h = getHost();
+      if (!h || typeof h.has !== 'function' || !h.has(full)) return undefined;
+      try {
+        return formatMessage(h.t(full, params as Record<string, unknown> | undefined), params ?? {}, h.locale ?? 'en');
+      } catch {
+        return undefined;
+      }
     },
     has: (key) => key in fallback || rawHas(key),
     locale: () => getHost()?.locale ?? (typeof navigator !== 'undefined' ? navigator.language : 'en'),

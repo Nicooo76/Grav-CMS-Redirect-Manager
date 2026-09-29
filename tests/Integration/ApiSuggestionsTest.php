@@ -148,6 +148,38 @@ final class ApiSuggestionsTest extends ApiTestCase
         self::assertSame(['/typograpy'], array_column($this->api->get('/redirects/suggestions', ['status' => 'rejected'])->data(), 'path'));
     }
 
+    public function testListCountsPerStatusIgnoreTheStatusFilter(): void
+    {
+        $empty = $this->api->get('/redirects/suggestions');
+        self::assertSame(['open' => 0, 'accepted' => 0, 'rejected' => 0], $empty->meta()['counts'] ?? null);
+        self::assertSame(0, $empty->meta()['total']);
+
+        $rows = $this->generateAndList();
+        $expected = ['open' => 3, 'accepted' => 0, 'rejected' => 0];
+        self::assertSame($expected, $this->api->get('/redirects/suggestions')->meta()['counts']);
+
+        $this->api->post('/redirects/suggestions/' . $rows['/typograpy']['id'] . '/reject');
+        $this->api->post('/redirects/suggestions/' . $rows['/blog/blog-post']['id'] . '/accept');
+
+        $open = $this->api->get('/redirects/suggestions');
+        self::assertSame(['open' => 1, 'accepted' => 1, 'rejected' => 1], $open->meta()['counts']);
+        self::assertSame(1, $open->meta()['total'], 'total stays the number of returned rows');
+        foreach (['accepted', 'rejected', 'all'] as $status) {
+            self::assertSame(['open' => 1, 'accepted' => 1, 'rejected' => 1], $this->api->get('/redirects/suggestions', ['status' => $status])->meta()['counts'], $status);
+        }
+        self::assertSame(1, $this->api->get('/redirects/suggestions', ['status' => 'accepted'])->meta()['total']);
+
+        // min_score and source narrow the counts, status does not
+        self::assertSame(['open' => 0, 'accepted' => 1, 'rejected' => 0], $this->api->get('/redirects/suggestions', ['min_score' => 0.9, 'status' => 'rejected'])->meta()['counts']);
+        self::assertSame(['open' => 0, 'accepted' => 0, 'rejected' => 0], $this->api->get('/redirects/suggestions', ['source' => 'sitemap'])->meta()['counts']);
+        self::assertSame(['open' => 1, 'accepted' => 1, 'rejected' => 1], $this->api->get('/redirects/suggestions', ['source' => '404'])->meta()['counts']);
+    }
+
+    public function testListNamesTheScoreBulkAcceptStartsWith(): void
+    {
+        self::assertSame(0.9, $this->api->get('/redirects/suggestions')->meta()['bulk_accept_score'], 'default of suggestions.bulk_accept_score');
+    }
+
     /**
      * @return array<string, array{0: array<string, mixed>, 1: string}>
      */

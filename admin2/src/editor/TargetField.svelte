@@ -1,13 +1,12 @@
 <script lang="ts">
   import { Lightbulb } from 'lucide-svelte';
   import Segmented from '../lib/ui/Segmented.svelte';
-  import Combobox, { type ComboItem } from '../lib/ui/Combobox.svelte';
+  import PagePicker from '../lib/ui/PagePicker.svelte';
   import Field from '../lib/ui/Field.svelte';
-  import { api, isAbort } from '../lib/api';
   import { t, locale } from '../lib/i18n.svelte';
   import { formatPercent } from '../lib/format';
   import type { RuleForm } from '../lib/editor-form';
-  import type { PageHit, SuggestionCandidate, TargetType } from '../lib/types';
+  import type { SuggestionCandidate, TargetType } from '../lib/types';
 
   interface Props {
     form: RuleForm;
@@ -17,36 +16,11 @@
   }
   let { form = $bindable(), invalid = false, error = null, candidates = [] }: Props = $props();
 
-  let pageItems = $state<ComboItem[]>([]);
-  let pageLoading = $state(false);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let ctl: AbortController | null = null;
-
-  async function searchPages(q: string) {
-    clearTimeout(timer);
-    timer = setTimeout(async () => {
-      ctl?.abort();
-      ctl = new AbortController();
-      pageLoading = true;
-      try {
-        const { data } = await api.get<PageHit[]>('/redirects/pages', { q, limit: 8 }, ctl.signal);
-        pageItems = (Array.isArray(data) ? data : []).map((p) => ({
-          value: p.route,
-          label: p.route,
-          description: [p.title, (p.translations?.length ? p.translations : [p.language]).filter(Boolean).join(', ')].filter(Boolean).join(' · '),
-          data: p,
-        }));
-      } catch (e) {
-        if (!isAbort(e)) pageItems = [];
-      } finally {
-        pageLoading = false;
-      }
-    }, 200);
-  }
+  let picker: { search(q: string): void } | undefined = $state();
 
   function setType(v: TargetType) {
     form.target_type = v;
-    if (v === 'page') searchPages(form.target);
+    if (v === 'page') picker?.search(form.target);
   }
 
   function pickCandidate(c: SuggestionCandidate) {
@@ -72,14 +46,7 @@
   {/snippet}
   {#snippet children({ id, describedBy })}
     {#if form.target_type === 'page'}
-      <Combobox {id} bind:value={form.target} items={pageItems} allowCustom mono {describedBy} invalid={invalid} loading={pageLoading} onsearch={searchPages} placeholder={t('EDITOR.PAGE_SEARCH')} emptyText={t('EDITOR.PAGE_NONE')}>
-        {#snippet option(it)}
-          <span class="grow">
-            <span class="mono">{it.label}</span>
-            {#if it.description}<span class="muted text-xs" style="display:block">{it.description}</span>{/if}
-          </span>
-        {/snippet}
-      </Combobox>
+      <PagePicker bind:this={picker} {id} bind:value={form.target} {describedBy} {invalid} />
     {:else}
       <input {id} class="input mono" bind:value={form.target} {placeholder} aria-invalid={invalid || undefined} aria-describedby={describedBy} spellcheck="false" autocomplete="off" />
     {/if}

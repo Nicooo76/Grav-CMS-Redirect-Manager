@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { fallbackEn } from './lib/i18n-fallback';
+import { allEn as fallbackEn } from './lib/i18n-all';
+import { fallbackEn as shipped } from './lib/i18n-fallback';
 import { strings_de } from './i18n/de.index';
 
 const root = join(import.meta.dirname);
@@ -30,6 +31,16 @@ function usedKeys(): Map<string, string[]> {
 }
 
 const placeholders = (s: string) => [...s.matchAll(/\{(\w+)(?:,|\})/g)].map((m) => m[1]).sort();
+
+describe('bundled fallback', () => {
+  it('is a subset of the full catalog and covers the shell', () => {
+    for (const [k, v] of Object.entries(shipped)) expect(fallbackEn[k], k).toBe(v);
+    for (const k of ['TAB.RULES', 'TAB.SETTINGS', 'COMMON.ERROR_NETWORK', 'COMMON.RETRY', 'PAGE_ERROR.TITLE', 'STATUS.301']) expect(shipped[k], k).toBeTruthy();
+  });
+  it('stays small (the rest comes from the host dictionary)', () => {
+    expect(Object.keys(shipped).length).toBeLessThan(150);
+  });
+});
 
 describe('i18n catalog', () => {
   it('has an English string for every literal t() key in the source', () => {

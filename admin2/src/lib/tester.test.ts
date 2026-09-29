@@ -49,10 +49,14 @@ describe('statusVariant', () => {
 });
 
 describe('summarize', () => {
-  it('single redirect: one hop, two steps, terminal is the destination', () => {
+  // shapes below are what GET /redirects/test really answers (see docs/API.md, "Tester")
+  it('single redirect: one hop plus the page the visitor ends up on', () => {
     const o = summarize(
       resp({
-        chain: [{ url: '/old', status: 301, rule_id: 'r1' }],
+        chain: [
+          { url: '/old', status: 301, rule_id: 'r1', location: '/new' },
+          { url: '/new', status: 200, rule_id: null, location: null },
+        ],
         final: { url: '/new', status: 200 },
         page_exists: true,
       }),
@@ -64,6 +68,7 @@ describe('summarize', () => {
     expect(o.variant).toBe('info');
     expect(o.steps.map((s) => s.url)).toEqual(['/old', '/new']);
     expect(o.steps[0].ruleId).toBe('r1');
+    expect(o.steps[0].terminal).toBe(false);
     expect(o.steps[1].terminal).toBe(true);
     expect(o.finalUrl).toBe('/new');
     expect(o.destinationMissing).toBe(false);
@@ -73,8 +78,9 @@ describe('summarize', () => {
     const o = summarize(
       resp({
         chain: [
-          { url: '/a', status: 302, rule_id: 'r1' },
-          { url: '/b', status: 301, rule_id: 'r2' },
+          { url: '/a', status: 302, rule_id: 'r1', location: '/b' },
+          { url: '/b', status: 301, rule_id: 'r2', location: '/c' },
+          { url: '/c', status: 200, rule_id: null, location: null },
         ],
         final: { url: '/c', status: 200 },
       }),
@@ -85,24 +91,47 @@ describe('summarize', () => {
   });
 
   it('flags a redirect whose destination returns 404', () => {
-    const o = summarize(resp({ chain: [{ url: '/a', status: 301, rule_id: 'r1' }], final: { url: '/gone', status: 404 } }));
+    const o = summarize(
+      resp({
+        chain: [
+          { url: '/a', status: 301, rule_id: 'r1', location: '/gone' },
+          { url: '/gone', status: 404, rule_id: null, location: null },
+        ],
+        final: { url: '/gone', status: 404 },
+      }),
+    );
     expect(o.kind).toBe('redirect');
     expect(o.destinationMissing).toBe(true);
   });
 
-  it('detects a loop from repeated URLs', () => {
+  it('external target: not requested, so the last step has no status', () => {
+    const o = summarize(
+      resp({
+        chain: [{ url: '/partner', status: 302, rule_id: 'r1', location: 'https://example.org/' }],
+        final: { url: 'https://example.org/', status: 200, external: true },
+      }),
+    );
+    expect(o.kind).toBe('redirect');
+    expect(o.external).toBe(true);
+    expect(o.destinationMissing).toBe(false);
+    expect(o.steps).toHaveLength(2);
+    expect(o.steps[1]).toMatchObject({ url: 'https://example.org/', status: null, terminal: true, external: true });
+  });
+
+  it('detects a loop from the final flag; the closing URL becomes the last step', () => {
     const o = summarize(
       resp({
         chain: [
-          { url: '/a', status: 301, rule_id: 'r1' },
-          { url: '/b', status: 301, rule_id: 'r2' },
+          { url: '/a', status: 301, rule_id: 'r1', location: '/b' },
+          { url: '/b', status: 301, rule_id: 'r2', location: '/a' },
         ],
-        final: { url: '/a', status: 508 },
+        final: { url: '/a', status: 301, loop: true },
       }),
     );
     expect(o.kind).toBe('loop');
     expect(o.loop).toBe(true);
     expect(o.headlineKey).toBe('TESTER.HEAD_LOOP');
+    expect(o.steps).toHaveLength(3);
     expect(o.steps[o.steps.length - 1]).toMatchObject({ url: '/a', loops: true, terminal: true, status: null });
   });
 
@@ -111,39 +140,44 @@ describe('summarize', () => {
     expect(hasLoop(['/a', '/b'])).toBe(false);
   });
 
-  it('detects the depth limit', () => {
-    const chain = Array.from({ length: 10 }, (_, i) => ({ url: `/p${i}`, status: 301, rule_id: `r${i}` }));
-    const o = summarize(resp({ chain, final: { url: '/p10', status: 200 } }));
+  it('detects the depth limit from the truncated flag', () => {
+    const chain = Array.from({ length: 10 }, (_, i) => ({ url: `/p${i}`, status: 301, rule_id: `r${i}`, location: `/p${i + 1}` }));
+    const o = summarize(resp({ chain, final: { url: '/p10', status: 301, truncated: true } }));
     expect(o.kind).toBe('depth');
     expect(o.depth).toBe(true);
     expect(o.loop).toBe(false);
+    expect(o.steps).toHaveLength(10);
   });
 
-  it('classifies pass-through, gone and legal rules', () => {
-    const pass = summarize(resp({ chain: [{ url: '/x', status: 200, rule_id: 'r1' }], final: { url: '/x', status: 200 } }));
+  it('classifies pass-through, gone and legal rules: one step, no extra terminal', () => {
+    const pass = summarize(resp({ chain: [{ url: '/x', status: 200, rule_id: 'r1', location: null }], final: { url: '/x', status: 200 } }));
     expect(pass.kind).toBe('passthrough');
     expect(pass.steps).toHaveLength(1);
+    expect(pass.steps[0].terminal).toBe(true);
     expect(pass.variant).toBe('ok');
-    const gone = summarize(resp({ chain: [{ url: '/x', status: 410, rule_id: 'r1' }], final: { url: '/x', status: 410 } }));
+    const gone = summarize(resp({ chain: [{ url: '/x', status: 410, rule_id: 'r1', location: null }], final: { url: '/x', status: 410 } }));
     expect(gone.kind).toBe('gone');
     expect(gone.variant).toBe('warn');
-    const legal = summarize(resp({ chain: [{ url: '/x', status: 451, rule_id: 'r1' }], final: { url: '/x', status: 451 } }));
+    const legal = summarize(resp({ chain: [{ url: '/x', status: 451, rule_id: 'r1', location: null }], final: { url: '/x', status: 451 } }));
     expect(legal.kind).toBe('legal');
   });
 
-  it('no rule: page found or not found', () => {
-    const found = summarize(resp({ final: { url: '/p', status: 200 }, page_exists: true }));
+  it('no rule: page found, not found or excluded', () => {
+    const found = summarize(resp({ chain: [{ url: '/p', status: 200, rule_id: null, location: null }], final: { url: '/p', status: 200 }, page_exists: true }));
     expect(found.kind).toBe('found');
     expect(found.headlineKey).toBe('TESTER.HEAD_FOUND');
     expect(found.variant).toBe('ok');
     expect(found.steps).toHaveLength(1);
     expect(found.hops).toBe(0);
-    const nf = summarize(resp({ final: { url: '/p', status: 404 } }));
+    const nf = summarize(resp({ chain: [{ url: '/p', status: 404, rule_id: null, location: null }], final: { url: '/p', status: 404 } }));
     expect(nf.kind).toBe('notfound');
     expect(nf.variant).toBe('bad');
+    const ex = summarize(resp({ context: { excluded: true }, chain: [{ url: '/admin/x', status: 404, rule_id: null, location: null }], final: { url: '/admin/x', status: 404 } }));
+    expect(ex.kind).toBe('excluded');
+    expect(ex.variant).toBe('muted');
   });
 
-  it('falls back to page_exists when the final status is missing', () => {
+  it('falls back to page_exists when the chain is empty and the final status is missing', () => {
     const o = summarize(resp({ final: { url: '/p', status: 0 }, page_exists: true }));
     expect(o.kind).toBe('found');
     expect(o.status).toBe(200);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack, tick } from 'svelte';
-  import { Trash2, FlaskConical } from 'lucide-svelte';
+  import { Trash2, FlaskConical, Lightbulb } from 'lucide-svelte';
   import Slideover from '../lib/ui/Slideover.svelte';
   import Button from '../lib/ui/Button.svelte';
   import Field from '../lib/ui/Field.svelte';
@@ -22,13 +22,15 @@
   import ConditionsEditor from './ConditionsEditor.svelte';
   import { api, ApiError, isAbort } from '../lib/api';
   import { describeError } from '../lib/errors';
+  import { validationText } from '../lib/issue-text';
   import { t, locale } from '../lib/i18n.svelte';
   import { formatDateTime, formatNumber, formatRelative, isoToLocalInput, localInputToIso } from '../lib/format';
   import { blankRule } from '../lib/rule-utils';
   import { sampleFromSource } from '../lib/sample';
+  import { suggestMatchType } from '../lib/match-hint';
   import { navigate } from '../lib/router.svelte';
   import { getLastRulesQuery, rules } from '../lib/state/rules.svelte';
-  import { bump, closeEditor, editor } from '../lib/state/app.svelte';
+  import { bump, can, closeEditor, defaultStatus, editor } from '../lib/state/app.svelte';
   import { dialogs, toast } from '../lib/state/notify.svelte';
   import {
     STATUS_CODES,
@@ -71,6 +73,8 @@
   const isNew = $derived(ruleId === null);
   const dirty = $derived(!loading && isDirty(initial, form));
   const needTarget = $derived(needsTarget(form.status));
+  const readOnly = $derived(!can.manage);
+  const matchSuggestion = $derived(suggestMatchType(form.source, form.match_type as MatchType));
 
   /* ---------- open / load ---------- */
   let lastReq: unknown = null;
@@ -114,8 +118,8 @@
       }
     } else {
       loading = false;
-      form = initialForm(null, r.prefill ?? {});
-      initial = initialForm(null, r.prefill ?? {});
+      form = initialForm(null, r.prefill ?? {}, defaultStatus());
+      initial = initialForm(null, r.prefill ?? {}, defaultStatus());
       // a duplicated or prefilled rule counts as unsaved only once the user changed something
       open = advancedState(form);
       if (r.prefill && Object.keys(r.prefill).length > 0 && r.candidates?.length && !form.target) {
@@ -176,7 +180,7 @@
     } catch (e) {
       if (isAbort(e)) return;
       if (e instanceof ApiError && e.status === 422 && e.errors.length) {
-        issues = e.errors.map((x) => ({ code: x.code, severity: x.severity, message: x.message, field: x.field }) as Issue);
+        issues = e.errors.map((x) => ({ code: x.code, severity: x.severity, message: x.message, field: x.field, params: x.params }) as Issue);
         pv = { loading: false, result: null, unavailable: false };
       } else {
         pv = { loading: false, result: null, unavailable: true };
@@ -221,7 +225,7 @@
   }
 
   async function save() {
-    if (saving || loading) return;
+    if (saving || loading || readOnly) return;
     touched = true;
     saveError = null;
     const problems = clientChecks(form);
@@ -253,7 +257,7 @@
       }
       toast.success(t(ruleId ? 'EDITOR.SAVED' : 'EDITOR.CREATED'));
       const warn = saved?.issues?.find((i) => i.severity === 'warning');
-      if (warn) toast.warning(warn.message);
+      if (warn) toast.warning(validationText(warn));
       bump('rules');
       const cb = req?.onsaved;
       closeEditor();
@@ -265,15 +269,16 @@
         for (const er of e.errors) {
           if (er.severity === 'warning') continue;
           const f = issueField({ code: er.code, field: er.field } as unknown as Issue);
-          if (f === 'general') general.push(er.message);
-          else if (!next[f]) next[f] = er.message;
+          const text = validationText(er);
+          if (f === 'general') general.push(text);
+          else if (!next[f]) next[f] = text;
         }
         serverErrors = next;
         saveError = general[0] ?? (Object.keys(next).length ? t('EDITOR.FIX_FIELDS') : e.detail || t('COMMON.ERROR'));
         await tick();
         const first = Object.keys(next)[0] as FieldName | undefined;
         if (first) focusField(first);
-      } else if (e instanceof ApiError && e.status === 412) {
+      } else if (e instanceof ApiError && (e.status === 409 || e.status === 412)) {
         saveError = t('EDITOR.CHANGED_ELSEWHERE');
       } else {
         saveError = describeError(e);
@@ -308,6 +313,7 @@
   }
 
   function onkey(e: KeyboardEvent) {
+    if (readOnly) return;
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       void save();
@@ -322,7 +328,7 @@
   const statusOptions = $derived(STATUS_CODES.map((c) => ({ value: String(c), label: `${c} · ${t(`STATUS.${c}`)}` })));
   const sourceHint = $derived(t(`EDITOR.SOURCE_HINT_${form.match_type.toUpperCase()}`));
   const candidates = $derived(req?.candidates ?? []);
-  const title = $derived(isNew ? t('EDITOR.TITLE_NEW') : t('EDITOR.TITLE_EDIT'));
+  const title = $derived(readOnly && !isNew ? t('EDITOR.TITLE_VIEW') : isNew ? t('EDITOR.TITLE_NEW') : t('EDITOR.TITLE_EDIT'));
 
   const sectionSummary = $derived({
     query: form.query_mode === 'ignore' && !form.query_ignore.length ? '' : t(`EDITOR.QM_${form.query_mode.toUpperCase()}`),
@@ -366,6 +372,11 @@
         </div>
       {/if}
 
+      {#if readOnly}
+        <div class="banner" role="note"><div class="b-body">{t('PERM.READ_ONLY')}</div></div>
+      {/if}
+
+      <fieldset class="ro" disabled={readOnly}>
       <section class="stack" style="gap:1rem" aria-label={t('EDITOR.SECTION_RULE')}>
         <Field label={t('EDITOR.SOURCE')} hint={sourceHint} error={fieldError.source ?? null} id="rm-source">
           {#snippet labelExtra()}
@@ -387,6 +398,14 @@
             />
           {/snippet}
         </Field>
+
+        {#if matchSuggestion && !readOnly}
+          <div class="banner" role="status" data-testid="match-hint">
+            <Lightbulb size={16} aria-hidden="true" />
+            <div class="b-body">{t(`EDITOR.HINT_${form.match_type.toUpperCase()}_TO_${matchSuggestion.toUpperCase()}`)}</div>
+            <Button onclick={() => (form.match_type = matchSuggestion)}>{t(`EDITOR.HINT_SWITCH_${matchSuggestion.toUpperCase()}`)}</Button>
+          </div>
+        {/if}
 
         <PreviewPanel
           bind:sample
@@ -434,6 +453,13 @@
             {/snippet}
           </Field>
         </div>
+
+        {#if isNew && !readOnly && (form.status === 302 || form.status === 307)}
+          <div class="row wrap text-xs status-note" data-testid="status-note">
+            <span class="muted">{form.status === defaultStatus() ? t('EDITOR.STATUS_DEFAULT_NOTE', { code: form.status }) : t('EDITOR.STATUS_TEMP_NOTE', { code: form.status })}</span>
+            <Button variant="outline" onclick={() => (form.status = 301)}>{t('EDITOR.USE_301')}</Button>
+          </div>
+        {/if}
 
         <div class="row enabled">
           <Switch bind:checked={form.enabled} label={t('EDITOR.ENABLED')} />
@@ -491,19 +517,24 @@
           </Field>
         </Disclosure>
       </div>
+      </fieldset>
     {/if}
   </div>
 
   {#snippet footer()}
-    {#if !isNew}
+    {#if !isNew && !readOnly}
       <Button variant="danger" onclick={remove} disabled={saving || loading}><Trash2 size={14} />{t('COMMON.DELETE')}</Button>
     {/if}
     <span class="spacer"></span>
-    <span class="muted text-2xs hide-sm"><kbd>Ctrl</kbd> <kbd>Enter</kbd></span>
-    <Button variant="outline" onclick={requestClose} disabled={saving}>{t('COMMON.CANCEL')}</Button>
-    <Button variant="primary" size="default" onclick={save} loading={saving} disabled={loading || !!loadError || blocked} title={blocked ? t('EDITOR.BLOCKED') : undefined}>
-      {isNew ? t('EDITOR.CREATE') : t('EDITOR.SAVE')}
-    </Button>
+    {#if readOnly}
+      <Button variant="outline" onclick={requestClose}>{t('COMMON.CLOSE')}</Button>
+    {:else}
+      <span class="muted text-2xs hide-sm"><kbd>Ctrl</kbd> <kbd>Enter</kbd></span>
+      <Button variant="outline" onclick={requestClose} disabled={saving}>{t('COMMON.CANCEL')}</Button>
+      <Button variant="primary" size="default" onclick={save} loading={saving} disabled={loading || !!loadError || blocked} title={blocked ? t('EDITOR.BLOCKED') : undefined}>
+        {isNew ? t('EDITOR.CREATE') : t('EDITOR.SAVE')}
+      </Button>
+    {/if}
   {/snippet}
 </Slideover>
 
@@ -515,6 +546,20 @@
     container-type: inline-size;
   }
   .meta {
+    margin-block-start: -0.25rem;
+  }
+  .ro {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-inline-size: 0;
+  }
+  .status-note {
+    gap: 0.5rem;
+    align-items: center;
     margin-block-start: -0.25rem;
   }
   .enabled {

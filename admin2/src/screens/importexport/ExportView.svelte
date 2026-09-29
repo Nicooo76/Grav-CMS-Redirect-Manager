@@ -8,12 +8,12 @@
   import SiteConfigPanel from './SiteConfigPanel.svelte';
   import { formats, formatDesc, formatLabel, loadFormats } from './formats.svelte';
   import { api } from '../../lib/api';
-  import { downloadBlob } from '../../lib/download';
+  import { requestExport, saveExport } from '../../lib/export';
   import { describeError } from '../../lib/errors';
   import { t } from '../../lib/i18n.svelte';
   import { skippedLines, sortExportFormats } from '../../lib/import-preview';
   import { toast } from '../../lib/state/notify.svelte';
-  import type { ExportResult, GroupsResult } from '../../lib/types';
+  import type { GroupsResult } from '../../lib/types';
 
   let onlyEnabled = $state(false);
   let group = $state('');
@@ -47,18 +47,12 @@
     error = null;
     last = null;
     try {
-      const { data } = await api.get<ExportResult>('/redirects/export', {
-        format: id,
-        only_enabled: onlyEnabled || undefined,
-        group: group || undefined,
-        status: status || undefined,
-      });
+      const data = await requestExport({ format: id, onlyEnabled, group, status });
       const skippedItems = Array.isArray(data.skipped) ? data.skipped : [];
-      if (!data.content || !data.content.trim()) {
+      if (!saveExport(data, id)) {
         toast.info(t('IMPORTEXPORT.EXPORT_EMPTY'));
         return;
       }
-      downloadBlob(data.content, data.filename || `redirects.${id}`, data.mime || 'text/plain');
       toast.success(t('IMPORTEXPORT.EXPORT_DONE', { filename: data.filename || `redirects.${id}` }));
       if (skippedItems.length) last = { label, skipped: skippedItems };
     } catch (e) {

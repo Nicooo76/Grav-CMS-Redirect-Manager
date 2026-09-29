@@ -86,7 +86,8 @@ export function sampleFromSource(source: string, matchType: MatchType, origin = 
   const src = source.trim();
   if (!src) return '';
   let path: string;
-  if (matchType === 'wildcard') path = src.replace(/\*/g, 'example');
+  // a * in an exact source is meant as a wildcard: the example URL fills it instead of copying the pattern
+  if (matchType === 'wildcard' || (matchType === 'exact' && src.includes('*'))) path = src.replace(/\*+/g, 'example');
   else if (matchType === 'regex') path = sampleFromRegex(src);
   else path = src;
   if (!path.startsWith('/') && !/^[a-z]+:\/\//i.test(path)) path = `/${path}`;

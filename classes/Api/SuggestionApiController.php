@@ -33,9 +33,14 @@ final class SuggestionApiController extends BaseController
     public function index(ServerRequestInterface $request): ResponseInterface
     {
         return $this->read($request, function () use ($request): ResponseInterface {
-            $rows = $this->app()->suggestions()->list($this->query($request));
+            $suggestions = $this->app()->suggestions();
+            $result = $suggestions->listWithCounts($this->query($request));
 
-            return ApiResponse::create($rows, 200, [], ['total' => count($rows)]);
+            return ApiResponse::create($result['rows'], 200, [], [
+                'total' => count($result['rows']),
+                'counts' => $result['counts'],
+                'bulk_accept_score' => $suggestions->bulkAcceptScore(),
+            ]);
         });
     }
 

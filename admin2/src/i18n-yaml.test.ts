@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import YAML from 'yaml';
-import { fallbackEn } from './lib/i18n-fallback';
+import { allEn as fallbackEn } from './lib/i18n-all';
 import { strings_de } from './i18n/de.index';
 
-const doc = YAML.parse(readFileSync(join(import.meta.dirname, '..', 'i18n', 'ui.yaml'), 'utf8'));
+const pluginRoot = join(import.meta.dirname, '..', '..');
+const doc = YAML.parse(readFileSync(join(pluginRoot, 'languages.yaml'), 'utf8'));
+const P = 'PLUGIN_REDIRECT_MANAGER';
 
 /** Same flattening Grav does: nested keys joined with dots. */
 function flatten(node: unknown, prefix = '', out: Record<string, string> = {}): Record<string, string> {
@@ -14,17 +16,69 @@ function flatten(node: unknown, prefix = '', out: Record<string, string> = {}): 
   return out;
 }
 
-describe('i18n/ui.yaml', () => {
-  it('is shaped en/de -> PLUGIN_REDIRECT_MANAGER -> UI', () => {
+function phpFiles(dir: string, out: string[] = []): string[] {
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) phpFiles(p, out);
+    else if (name.endsWith('.php')) out.push(p);
+  }
+  return out;
+}
+
+describe('languages.yaml', () => {
+  it('has an en and a de block for the plugin', () => {
     expect(Object.keys(doc).sort()).toEqual(['de', 'en']);
+    for (const lang of ['en', 'de']) expect(Object.keys(doc[lang])).toEqual([P]);
+  });
+
+  it('has the same keys in en and de', () => {
+    const en = Object.keys(flatten(doc.en[P])).sort();
+    const de = Object.keys(flatten(doc.de[P])).sort();
+    expect(de).toEqual(en);
+  });
+
+  it('carries every UI string of the sources, in en and de (run `npm run i18n` after editing src/i18n)', () => {
+    expect(flatten(doc.en[P].UI)).toEqual(fallbackEn);
+    expect(flatten(doc.de[P].UI)).toEqual(strings_de);
+  });
+
+  it('keeps UI as the last section, after the hand-written ones', () => {
     for (const lang of ['en', 'de']) {
-      expect(Object.keys(doc[lang])).toEqual(['PLUGIN_REDIRECT_MANAGER']);
-      expect(Object.keys(doc[lang].PLUGIN_REDIRECT_MANAGER)).toEqual(['UI']);
+      const keys = Object.keys(doc[lang][P]);
+      expect(keys[keys.length - 1]).toBe('UI');
+      for (const section of ['TITLE', 'WIDGET', 'PERMISSIONS', 'CONFIG', 'FRONTEND', 'IMPORT', 'VALIDATION']) expect(keys, section).toContain(section);
     }
   });
 
-  it('is in sync with the sources (run `npm run i18n` after editing src/i18n)', () => {
-    expect(flatten(doc.en.PLUGIN_REDIRECT_MANAGER.UI)).toEqual(fallbackEn);
-    expect(flatten(doc.de.PLUGIN_REDIRECT_MANAGER.UI)).toEqual(strings_de);
+  it('has no empty texts', () => {
+    for (const lang of ['en', 'de']) for (const [k, v] of Object.entries(flatten(doc[lang][P]))) expect(v.trim(), `${lang} ${k}`).not.toBe('');
+  });
+
+  it('translates every code the importer can report', () => {
+    const codes = new Set<string>();
+    for (const file of phpFiles(join(pluginRoot, 'classes', 'ImportExport'))) {
+      for (const m of readFileSync(file, 'utf8').matchAll(/new ImportIssue\(\s*'([a-z_]+)'/g)) codes.add(m[1]!);
+    }
+    expect(codes.size).toBeGreaterThan(40);
+    for (const lang of ['en', 'de']) {
+      const table = doc[lang][P].IMPORT.ISSUE as Record<string, string>;
+      for (const code of codes) expect(table[code.toUpperCase()], `${lang} IMPORT.ISSUE.${code.toUpperCase()}`).toBeTruthy();
+    }
+  });
+
+  it('translates every validation code the rule checks can report', () => {
+    const codes = new Set<string>();
+    const read = (file: string) => readFileSync(join(pluginRoot, 'classes', file), 'utf8');
+    for (const file of ['Analysis/RuleValidator.php', 'Analysis/IssueFactory.php', 'Analysis/ChainAnalyzer.php']) {
+      for (const m of read(file).matchAll(/ValidationIssue::(?:error|warning|info)\(\s*'([a-z_]+)'/g)) codes.add(m[1]!);
+    }
+    for (const file of ['Security/TargetGuard.php', 'Security/RegexSafety.php']) {
+      for (const m of read(file).matchAll(/const ERR_[A-Z_]+ = '([a-z_]+)'/g)) codes.add(m[1]!);
+    }
+    expect(codes.size).toBeGreaterThan(20);
+    for (const lang of ['en', 'de']) {
+      const table = doc[lang][P].VALIDATION as Record<string, string>;
+      for (const code of codes) expect(table[code.toUpperCase()], `${lang} VALIDATION.${code.toUpperCase()}`).toBeTruthy();
+    }
   });
 });

@@ -487,6 +487,30 @@ final class ApiImportExportTest extends ApiTestCase
         self::assertSame(0, $this->api->get('/redirects/export', ['group' => 'nope'])->data()['exported']);
     }
 
+    public function testExportByIds(): void
+    {
+        $this->exportRules();
+        $sources = fn (array $query): array => array_column($this->parseCsv($this->api->get('/redirects/export', $query + ['format' => 'csv'])->data()['content']), 'source');
+
+        self::assertEqualsCanonicalizing(['/old', '/gone'], $sources(['ids' => 'r1,r4']));
+        self::assertSame(['/old'], $sources(['ids' => ' r1 , nope ']), 'unknown ids are ignored, blanks trimmed');
+        self::assertEqualsCanonicalizing(['/old', '/gone', '/blog/*', '^/p/(\d+)$'], $sources(['ids' => '']), 'a blank value is no filter');
+        self::assertSame(['/old'], $sources(['ids' => 'r1,r2,r3', 'group' => 'g1']), 'combined with the other filters');
+        self::assertSame([], $sources(['ids' => 'r3', 'only_enabled' => 1]), 'AND with only_enabled');
+        self::assertSame(0, $this->api->get('/redirects/export', ['ids' => 'nope'])->data()['exported'], 'no match exports nothing, not everything');
+        self::assertSame(0, $this->api->get('/redirects/export', ['ids' => ','])->data()['exported']);
+
+        $netlify = $this->api->get('/redirects/export', ['format' => 'netlify', 'ids' => 'r2,r4'])->data();
+        self::assertSame(1, $netlify['exported']);
+        self::assertSame([['r4', 'status_not_supported']], array_map(static fn (array $n): array => [$n['rule_id'], $n['code']], $netlify['skipped']));
+        self::assertStringContainsString('/blog/* /news/:splat 302', $netlify['content']);
+        self::assertStringNotContainsString('/old', $netlify['content']);
+
+        $htaccess = $this->api->get('/redirects/export', ['format' => 'htaccess', 'ids' => 'r1'])->data();
+        self::assertStringContainsString('^old/?$', $htaccess['content']);
+        self::assertStringNotContainsString('[G,NC]', $htaccess['content']);
+    }
+
     public function testCloudflareExportNeedsAHostAndSkipsWhatItCannotDo(): void
     {
         $this->exportRules();

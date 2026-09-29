@@ -25,7 +25,7 @@ final class CliRunner
     public function run(array $args): array
     {
         $process = proc_open(
-            [TestSite::phpBinary(), 'bin/plugin', 'redirect-manager', ...$args],
+            TestSite::phpCommand('bin/plugin', 'redirect-manager', ...$args),
             [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $this->site->dir,

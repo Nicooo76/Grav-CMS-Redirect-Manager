@@ -27,6 +27,7 @@ use Grav\Plugin\RedirectManager\Security\TargetGuard;
 use Grav\Plugin\RedirectManager\Stats\HitRecorder;
 use Grav\Plugin\RedirectManager\Stats\StatsStore;
 use Grav\Plugin\RedirectManager\Storage\CompiledRuleCache;
+use Grav\Plugin\RedirectManager\Storage\DataDirProtection;
 use Grav\Plugin\RedirectManager\Storage\RuleRepository;
 use Grav\Plugin\RedirectManager\Suggest\PageIndex;
 use Grav\Plugin\RedirectManager\Suggest\SuggestionStore;
@@ -49,6 +50,8 @@ final class ServiceFactory
 {
     /** @var array<string, object> */
     private array $instances = [];
+
+    private bool $dataDirProtected = false;
 
     /**
      * @param array<string, mixed>                                                                                 $config
@@ -166,6 +169,7 @@ final class ServiceFactory
 
     public function repository(): RuleRepository
     {
+        $this->protectDataDir();
         /** @var RuleRepository */
         return $this->instances[__FUNCTION__] ??= new RuleRepository($this->dataDir, $this->clock());
     }
@@ -175,7 +179,8 @@ final class ServiceFactory
         /** @var CompiledRuleCache */
         return $this->instances[__FUNCTION__] ??= new CompiledRuleCache(
             $this->cacheDir,
-            $this->repository()->file(),
+            // Not repository(): the read-only hot path must not touch the data directory.
+            $this->dataDir . '/' . RuleRepository::FILE,
             new RuleCompiler(),
             $this->logger,
         );
@@ -228,12 +233,14 @@ final class ServiceFactory
 
     public function hitRecorder(): HitRecorder
     {
+        $this->protectDataDir();
         /** @var HitRecorder */
         return $this->instances[__FUNCTION__] ??= new HitRecorder($this->dataDir . '/hits', $this->clock());
     }
 
     public function statsStore(): StatsStore
     {
+        $this->protectDataDir();
         /** @var StatsStore */
         return $this->instances[__FUNCTION__] ??= new StatsStore(
             $this->dataDir . '/stats.json',
@@ -245,6 +252,7 @@ final class ServiceFactory
 
     public function logStore(): LogStore
     {
+        $this->protectDataDir();
         /** @var LogStore */
         return $this->instances[__FUNCTION__] ??= $this->createLogStore();
     }
@@ -277,18 +285,21 @@ final class ServiceFactory
 
     public function resolvedPaths(): ResolvedPaths
     {
+        $this->protectDataDir();
         /** @var ResolvedPaths */
         return $this->instances[__FUNCTION__] ??= new ResolvedPaths($this->dataDir . '/404-state.json');
     }
 
     public function suggestionStore(): SuggestionStore
     {
+        $this->protectDataDir();
         /** @var SuggestionStore */
         return $this->instances[__FUNCTION__] ??= new SuggestionStore($this->dataDir . '/suggestions.json', $this->clock());
     }
 
     public function checkResultStore(): CheckResultStore
     {
+        $this->protectDataDir();
         /** @var CheckResultStore */
         return $this->instances[__FUNCTION__] ??= new CheckResultStore($this->dataDir . '/target-checks.json');
     }
@@ -296,6 +307,7 @@ final class ServiceFactory
     /** Remembers which 404 paths and dead targets were already reported by webhook (notify-state.json). */
     public function thresholdTracker(): ThresholdTracker
     {
+        $this->protectDataDir();
         /** @var ThresholdTracker */
         return $this->instances[__FUNCTION__] ??= new ThresholdTracker($this->dataDir . '/notify-state.json', $this->clock());
     }
@@ -332,6 +344,7 @@ final class ServiceFactory
     /** Pending deleted pages, unseen auto rules (sidebar badge): auto-state.json. */
     public function autoState(): AutoState
     {
+        $this->protectDataDir();
         /** @var AutoState */
         return $this->instances[__FUNCTION__] ??= new AutoState($this->dataDir . '/auto-state.json', $this->clock());
     }
@@ -356,6 +369,18 @@ final class ServiceFactory
     public function ipMode(): IpMode
     {
         return IpMode::fromConfig($this->config('log.ip_mode', 'anonymize'));
+    }
+
+    /** Once per factory: .htaccess and index.html in the data directory (see DataDirProtection). */
+    private function protectDataDir(): void
+    {
+        if ($this->dataDirProtected) {
+            return;
+        }
+        $this->dataDirProtected = true;
+        if (!DataDirProtection::ensure($this->dataDir)) {
+            $this->logger?->warning('Redirect Manager: cannot protect ' . $this->dataDir . ' (.htaccess, index.html): check the directory permissions.');
+        }
     }
 
     private function createLogStore(): LogStore

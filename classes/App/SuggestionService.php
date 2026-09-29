@@ -82,6 +82,21 @@ final class SuggestionService
      */
     public function list(array $query = []): array
     {
+        return $this->listWithCounts($query)['rows'];
+    }
+
+    /**
+     * Like list(), plus the number of stored suggestions per status. The counts follow `min_score` and `source`
+     * but ignore `status`, so tabs for the three states keep stable numbers while the list is filtered.
+     *
+     * @param array<string, mixed> $query status (open|accepted|rejected|all, default open), min_score, source
+     *
+     * @return array{rows: list<array<string, mixed>>, counts: array{open: int, accepted: int, rejected: int}}
+     *
+     * @throws InvalidInputException
+     */
+    public function listWithCounts(array $query = []): array
+    {
         $status = isset($query['status']) && is_string($query['status']) && $query['status'] !== '' ? $query['status'] : SuggestionStore::STATUS_OPEN;
         if (!in_array($status, [SuggestionStore::STATUS_OPEN, SuggestionStore::STATUS_ACCEPTED, SuggestionStore::STATUS_REJECTED, 'all'], true)) {
             throw new InvalidInputException('"status" must be open, accepted, rejected or all.', field: 'status');
@@ -95,14 +110,19 @@ final class SuggestionService
         }
         $source = isset($query['source']) && is_string($query['source']) && $query['source'] !== '' ? $query['source'] : null;
 
-        $records = array_values(array_filter(
+        $matching = array_values(array_filter(
             $this->services->suggestionStore()->all(),
-            static fn (array $r): bool => ($status === 'all' || $r['status'] === $status)
-                && $r['score'] >= $min
-                && ($source === null || $r['source'] === $source),
+            static fn (array $r): bool => $r['score'] >= $min && ($source === null || $r['source'] === $source),
         ));
+        $counts = ['open' => 0, 'accepted' => 0, 'rejected' => 0];
+        foreach ($matching as $record) {
+            if (isset($counts[$record['status']])) {
+                ++$counts[$record['status']];
+            }
+        }
+        $records = $status === 'all' ? $matching : array_values(array_filter($matching, static fn (array $r): bool => $r['status'] === $status));
 
-        return $this->rows($records);
+        return ['rows' => $this->rows($records), 'counts' => $counts];
     }
 
     /**
@@ -200,6 +220,16 @@ final class SuggestionService
     }
 
     /**
+     * The score bulk accept uses when the request names none: `suggestions.bulk_accept_score`, 0.9 by default.
+     */
+    public function bulkAcceptScore(): float
+    {
+        $score = (float) $this->services->config('suggestions.bulk_accept_score', 0.9);
+
+        return max(0.0, min(1.0, $score));
+    }
+
+    /**
      * Accepts open suggestions with a score of at least $minScore in one go (or previews them).
      *
      * @param list<string>|null $ids limit to these suggestions
@@ -210,7 +240,7 @@ final class SuggestionService
      */
     public function bulkAccept(?float $minScore = null, ?array $ids = null, bool $dryRun = false): array
     {
-        $min = $minScore ?? (float) $this->services->config('suggestions.bulk_accept_score', 0.9);
+        $min = $minScore ?? $this->bulkAcceptScore();
         if ($min < 0.0 || $min > 1.0) {
             throw new InvalidInputException('"min_score" must be between 0 and 1.', field: 'min_score');
         }
@@ -393,6 +423,11 @@ final class SuggestionService
         ];
         if ($language !== null) {
             $fields['conditions'] = ['languages' => [$language]];
+        }
+        // A path that differs from its target only in case (/shop/Rucksaecke to /shop/rucksaecke) is a loop for a
+        // case-insensitive rule. Grav routes are case sensitive, so the rule has to be as well.
+        if ($fields['target_type'] === 'page' && $fields['source'] !== $target && strcasecmp($fields['source'], $target) === 0) {
+            $fields['case_sensitive'] = true;
         }
         if (StatusCode::tryFrom(is_numeric($status) ? (int) $status : 0)?->needsTarget() === false) {
             $fields['target'] = '';

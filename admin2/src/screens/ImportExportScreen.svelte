@@ -3,6 +3,10 @@
   import ImportView from './importexport/ImportView.svelte';
   import { t } from '../lib/i18n.svelte';
   import { linkClick, router } from '../lib/router.svelte';
+  import { can } from '../lib/state/app.svelte';
+  import EmptyState from '../lib/ui/EmptyState.svelte';
+  import Button from '../lib/ui/Button.svelte';
+  import { Lock } from 'lucide-svelte';
 
   const isExport = $derived(router.route.name === 'export');
 </script>
@@ -15,6 +19,14 @@
 
   {#if isExport}
     <ExportView />
+  {:else if !can.manage}
+    <div class="card">
+      <EmptyState icon={Lock} title={t('PERM.IMPORT_TITLE')} text={t('PERM.NEEDS_MANAGE')}>
+        {#snippet actions()}
+          <Button variant="outline" size="default" href="#/export" onclick={linkClick}>{t('IMPORTEXPORT.NAV_EXPORT')}</Button>
+        {/snippet}
+      </EmptyState>
+    </div>
   {:else}
     <ImportView />
   {/if}

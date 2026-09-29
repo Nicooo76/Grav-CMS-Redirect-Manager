@@ -1,0 +1,249 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GRAV_VERSION: "2.2.2"
+  PHP_EXTENSIONS: mbstring, intl, pdo_sqlite, sqlite3, curl, zip, gd, opcache, dom, simplexml, fileinfo
+  PHP_INI: opcache.enable_cli=1, opcache.jit=off, memory_limit=1G
+
+jobs:
+  php:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.3", "8.4", "8.5"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          ini-values: ${{ env.PHP_INI }}
+          coverage: ${{ matrix.php == '8.3' && 'pcov' || 'none' }}
+          tools: composer:v2
+
+      - name: Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Composer cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-php${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php${{ matrix.php }}-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Code style
+        run: composer cs
+
+      # PHPStan scans the Grav sources of the test site (phpstan.neon.dist: scanDirectories), and the integration
+      # suite runs against it, so the site is set up before both.
+      - name: Grav test site cache
+        uses: actions/cache@v4
+        with:
+          path: .grav
+          key: grav-${{ env.GRAV_VERSION }}-php${{ matrix.php }}-${{ hashFiles('scripts/setup-test-site.sh') }}
+
+      - name: Set up the Grav test site
+        run: scripts/setup-test-site.sh
+
+      - name: PHPStan
+        run: composer stan
+
+      - name: Unit tests with coverage (fails below 90 %)
+        if: matrix.php == '8.3'
+        run: composer coverage
+
+      - name: Unit tests
+        if: matrix.php != '8.3'
+        run: composer unit
+
+      - name: Integration tests
+        run: RM_PHP_BIN="$(which php)" composer integration
+
+  ui:
+    name: Admin 2 bundles
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin2/package-lock.json
+
+      - name: Install
+        working-directory: admin2
+        run: npm ci
+
+      - name: Unit tests
+        working-directory: admin2
+        run: npm test
+
+      - name: Build the bundles
+        working-directory: admin2
+        run: npm run build
+
+      # The build also compiles the UI strings into languages.yaml (npm run i18n).
+      - name: Committed bundles and languages.yaml are up to date
+        run: |
+          git diff --exit-code -- admin-next languages.yaml
+          untracked="$(git ls-files --others --exclude-standard -- admin-next)"
+          if [ -n "$untracked" ]; then
+            echo "The build produced files that are not committed:" >&2
+            echo "$untracked" >&2
+            exit 1
+          fi
+
+  playwright:
+    name: Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # tests/ui is added separately; without a config this job passes without doing anything.
+      - name: Look for tests/ui/playwright.config.ts
+        id: ui
+        run: |
+          if [ -f tests/ui/playwright.config.ts ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No tests/ui/playwright.config.ts, nothing to run."
+          fi
+
+      - name: Set up PHP
+        if: steps.ui.outputs.run == 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          ini-values: ${{ env.PHP_INI }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Set up Node
+        if: steps.ui.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/ui/package-lock.json
+
+      - name: Install test dependencies
+        if: steps.ui.outputs.run == 'true'
+        working-directory: tests/ui
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Grav test site cache
+        if: steps.ui.outputs.run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .grav
+          key: grav-${{ env.GRAV_VERSION }}-php8.3-${{ hashFiles('scripts/setup-test-site.sh') }}
+
+      - name: Set up and start the Grav test site
+        if: steps.ui.outputs.run == 'true'
+        run: |
+          scripts/setup-test-site.sh
+          scripts/serve-test-site.sh ".grav/${GRAV_VERSION}" 8100
+
+      - name: Playwright
+        if: steps.ui.outputs.run == 'true'
+        working-directory: tests/ui
+        env:
+          RM_BASE_URL: http://127.0.0.1:8100
+          RM_SITE_DIR: ${{ github.workspace }}/.grav/${{ env.GRAV_VERSION }}
+          RM_CREDENTIALS_FILE: ${{ github.workspace }}/.grav/credentials.env
+        run: npx playwright test
+
+      - name: Upload the report
+        if: failure() && steps.ui.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            tests/ui/playwright-report
+            tests/ui/test-results
+            .grav/${{ env.GRAV_VERSION }}/logs
+          retention-days: 7
+          if-no-files-found: ignore
+
+  release-check:
+    name: Release ZIP
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          ini-values: ${{ env.PHP_INI }}
+          coverage: none
+          tools: composer:v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin2/package-lock.json
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Grav ZIP cache
+        uses: actions/cache@v4
+        with:
+          path: .grav/grav-admin-v${{ env.GRAV_VERSION }}.zip
+          key: grav-zip-${{ env.GRAV_VERSION }}
+
+      - name: Build the ZIP
+        id: build
+        run: |
+          version="$(sed -n 's/^version:[[:space:]]*//p' blueprints.yaml | head -n 1 | tr -d "\"' \t")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          scripts/build-release.sh "$version"
+
+      # Install by unzipping into user/plugins. This part must pass.
+      - name: Test the ZIP (manual install)
+        run: scripts/test-release.sh --manual
+
+      # bin/gpm direct-install names the plugin after the first *.yaml of the ZIP root, so permissions.yaml and
+      # mcp.yaml live in config/ (docs/DECISIONS.md D-024). This part must pass too.
+      - name: Test the ZIP (bin/gpm direct-install)
+        run: scripts/test-release.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grav-plugin-redirect-manager-${{ steps.build.outputs.version }}
+          path: dist/grav-plugin-redirect-manager-${{ steps.build.outputs.version }}.zip*
+          retention-days: 7

@@ -21,6 +21,6 @@ const en: Record<string, string> = {
   'SETTINGS.P_OFF_D': 'Switch off logging in the Logging tab, or set the IP address handling to “Do Not Store” to keep no address at all.',
   'SETTINGS.P_OFF_LINK': 'Show the Logging tab',
   'SETTINGS.P_FILES_SUMMARY': 'Where the files are',
-  'SETTINGS.P_FILES_TEXT': 'Everything sits in user/data/redirect-manager/: rules.yaml, stats.json, 404/ (one log file per day), suggestions.json and target-checks.json. If you use Git Sync, add hits/ and 404/ to .gitignore: logs are not content.',
+  'SETTINGS.P_FILES_TEXT': 'Everything sits in user/data/redirect-manager/: rules.yaml, stats.json, 404/ (one log file per day), hits/ (raw hit lists until they are folded into stats.json), suggestions.json and target-checks.json. If you use Git Sync, add hits/ and 404/ to .gitignore: logs are not content.',
 };
 export default en;

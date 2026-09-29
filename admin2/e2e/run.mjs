@@ -49,6 +49,9 @@ const scenarios = [
     },
   },
   { name: 'rules-error', url: 'index.html?fail=1#/rules' },
+  { name: 'rules-readonly', url: 'index.html?readonly=1#/rules', setup: async (p) => { await p.locator('grav-redirect-manager--page input[type=checkbox]').nth(2).check(); } },
+  { name: 'editor-readonly', url: 'index.html?readonly=1#/rules/pick', setup: async (p) => { await p.waitForTimeout(500); } },
+  { name: 'import-readonly', url: 'index.html?readonly=1#/import' },
   { name: 'editor-new', url: 'index.html#/rules/new', setup: async (p) => { await p.getByLabel('Source', { exact: true }).fill('/blog/2024/*'); await p.getByLabel('Target', { exact: true }).fill('/journal/2024/$1'); await p.waitForTimeout(700); } },
   { name: 'editor-edit', url: 'index.html#/rules/pick', setup: async (p) => { await p.waitForTimeout(500); } },
   { name: '404', url: 'index.html#/404' },
@@ -90,7 +93,7 @@ for (const sc of scenarios) {
       await page.waitForTimeout(900);
       await waitIdle(page);
       try {
-        if (sc.name === 'editor-edit') {
+        if (sc.name === 'editor-edit' || sc.name === 'editor-readonly') {
           const id = await page.evaluate(() => window.__RM_MOCK.state.rules[3].id);
           await page.evaluate((i) => (location.hash = `#/rules/${i}`), id);
           await page.waitForTimeout(900);

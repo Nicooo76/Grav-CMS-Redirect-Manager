@@ -126,7 +126,7 @@ const en: Record<string, string> = {
   'IMPORTEXPORT.EXPORT_EMPTY': 'No rules match these filters. There is nothing to download.',
   'IMPORTEXPORT.EXPORT_FAILED': 'The export failed',
   'IMPORTEXPORT.EXPORT_SKIPPED_TITLE': 'Left out of the {label} file: {n, plural, one {# rule} other {# rules}}',
-  'IMPORTEXPORT.EXPORT_SKIPPED_MORE': '…and {n} more.',
+  'IMPORTEXPORT.EXPORT_SKIPPED_MORE': '… and {n} more.',
 
   'IMPORTEXPORT.SITE_TITLE': 'Grav site configuration',
   'IMPORTEXPORT.SITE_TEXT': 'Grav applies site.redirects and site.routes from user/config/site.yaml by itself, before this plugin runs. Copy them into Redirect Manager to test, count and manage them here. Your site.yaml stays as it is.',

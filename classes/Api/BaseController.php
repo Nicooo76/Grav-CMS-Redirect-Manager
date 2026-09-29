@@ -75,6 +75,21 @@ abstract class BaseController extends AbstractApiController
     }
 
     /**
+     * Whether the request may exercise the permission. Same resolution as requirePermission() (key scope cap, super
+     * admin, `api.access` plus the permission), but it answers instead of throwing.
+     */
+    protected function may(ServerRequestInterface $request, string $permission): bool
+    {
+        try {
+            $this->requirePermission($request, $permission);
+        } catch (ApiException) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Read access: `api.redirects.read`.
      *
      * @param callable(): ResponseInterface $action

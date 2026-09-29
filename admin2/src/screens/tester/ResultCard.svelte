@@ -55,6 +55,11 @@
       <p class="muted note">{t('TESTER.NOTE_GONE')}</p>
     {:else if outcome.kind === 'legal'}
       <p class="muted note">{t('TESTER.NOTE_LEGAL')}</p>
+    {:else if outcome.kind === 'excluded'}
+      <p class="muted note">{t('TESTER.NOTE_EXCLUDED')}</p>
+    {/if}
+    {#if outcome.external}
+      <p class="muted note">{t('TESTER.NOTE_EXTERNAL')}</p>
     {/if}
 
     {#if outcome.loop}

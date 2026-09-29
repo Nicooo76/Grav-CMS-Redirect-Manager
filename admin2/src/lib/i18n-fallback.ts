@@ -1,26 +1,11 @@
 /**
- * English fallback strings, used when the host dictionary lacks a key.
- * One module per area (src/i18n/en/*.ts); the German counterparts live in
- * src/i18n/de/*.ts and both are compiled into i18n/ui.yaml by `npm run i18n`.
+ * English fallback shipped in the page bundle: the strings around the shell (tabs, errors, badges, status names,
+ * common buttons). Everything else comes from the host dictionary, which Admin 2 loads before it shows a plugin
+ * page and which always carries the English texts under the active language (the API plugin merges them in).
+ * Keeping all ~790 strings here cost 41 KB raw / 13 KB gzip for a case that only happens with a stale cache.
+ * `has()` still decides, per key, whether the host or this set answers (src/lib/i18n.ts).
+ * The complete set lives in i18n-all.ts.
  */
 import common from '../i18n/en/common';
-import rules from '../i18n/en/rules';
-import editor from '../i18n/en/editor';
-import notfound from '../i18n/en/notfound';
-import suggestions from '../i18n/en/suggestions';
-import tester from '../i18n/en/tester';
-import importexport from '../i18n/en/importexport';
-import settings from '../i18n/en/settings';
-import widget from '../i18n/en/widget';
 
-export const fallbackEn: Record<string, string> = {
-  ...common,
-  ...rules,
-  ...editor,
-  ...notfound,
-  ...suggestions,
-  ...tester,
-  ...importexport,
-  ...settings,
-  ...widget,
-};
+export const fallbackEn: Record<string, string> = { ...common };

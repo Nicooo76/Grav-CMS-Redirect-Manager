@@ -7,6 +7,11 @@ describe('sample URLs', () => {
     expect(sampleFromSource('old', 'exact')).toBe('/old');
     expect(sampleFromSource('  ', 'exact')).toBe('');
   });
+  it('fills a * in an exact source instead of copying it', () => {
+    expect(sampleFromSource('/blog/*', 'exact')).toBe('/blog/example');
+    expect(sampleFromSource('/*', 'exact')).toBe('/example');
+    expect(sampleFromSource('/a/**/b', 'wildcard')).toBe('/a/example/b');
+  });
   it('fills wildcards', () => {
     expect(sampleFromSource('/blog/*', 'wildcard')).toBe('/blog/example');
     expect(sampleFromSource('/*/print', 'wildcard')).toBe('/example/print');

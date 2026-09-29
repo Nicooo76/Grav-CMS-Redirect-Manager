@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'admin-next');
-const budgets = { 'pages/redirect-manager.js': 250 * 1024, 'widgets/redirect-manager.js': 60 * 1024 };
+// Size budgets (raw bytes). The page bundle carries Svelte and the whole UI; the English strings come from the host dictionary.
+const budgets = { 'pages/redirect-manager.js': 440 * 1024, 'widgets/redirect-manager.js': 90 * 1024 };
 let failed = false;
 
 for (const dir of ['pages', 'widgets']) {
@@ -29,7 +30,8 @@ for (const [rel, budget] of Object.entries(budgets)) {
   const size = statSync(p).size;
   const gz = gzipSync(code).length;
   const kb = (n) => (n / 1024).toFixed(1) + ' KB';
-  const over = size > budget ? `  (over the ${kb(budget)} target)` : '';
+  const over = size > budget ? `  (over the ${kb(budget)} budget)` : '';
+  if (size > budget) problems.push('over budget');
   console.log(`${problems.length ? 'FAIL' : 'ok  '} ${rel}: ${kb(size)} raw, ${kb(gz)} gzip${over}${problems.length ? '  -> ' + problems.join(', ') : ''}`);
   if (problems.length) failed = true;
 }

@@ -32,7 +32,12 @@ final class JsonlLogStore implements LogStore
     public const DEFAULT_MAX_DAY_BYTES = 10_485_760;
 
     private const MAX_LINE = 65536;
-    private const WRITE_ATTEMPTS = 5;
+    /**
+     * A writer starts over only when purge(), deletePath() or rotation replaced the file since it opened it, so it
+     * runs out of attempts only when such rewrites follow each other without a break. The limit stops a broken file
+     * system from spinning forever, it is not meant to be reached: an entry dropped here is a lost entry.
+     */
+    private const WRITE_ATTEMPTS = 1000;
     private const JSON_FLAGS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR;
 
     public function __construct(

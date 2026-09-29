@@ -11,6 +11,7 @@ export interface FieldError {
   code: string;
   message: string;
   severity: 'error' | 'warning';
+  params?: Record<string, unknown>;
 }
 
 export class ApiError extends Error {
@@ -109,6 +110,7 @@ async function parseError(res: Response): Promise<ApiError> {
       code: String(e.code ?? ''),
       message: String(e.message ?? e.detail ?? ''),
       severity: e.severity === 'warning' ? 'warning' : 'error',
+      ...(e.params && typeof e.params === 'object' ? { params: e.params } : {}),
     }));
   return new ApiError({
     status: res.status,

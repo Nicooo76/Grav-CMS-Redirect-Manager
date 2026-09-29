@@ -10,7 +10,7 @@
   import { formatNumber } from '../../lib/format';
   import { t, locale, dir } from '../../lib/i18n.svelte';
   import { mapEntries } from '../../lib/import-preview';
-  import { bump } from '../../lib/state/app.svelte';
+  import { bump, can } from '../../lib/state/app.svelte';
   import { toast } from '../../lib/state/notify.svelte';
   import type { ImportCommitResult, SiteConfig } from '../../lib/types';
 
@@ -62,7 +62,7 @@
   <div class="card-h">
     <h2 id="rm-site-h">{t('IMPORTEXPORT.SITE_TITLE')}</h2>
     <span class="spacer"></span>
-    {#if groups.length}
+    {#if groups.length && can.manage}
       <Button variant="primary" loading={importing} onclick={runImport}>{t('IMPORTEXPORT.SITE_IMPORT')}</Button>
     {/if}
   </div>

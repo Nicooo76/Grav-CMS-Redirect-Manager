@@ -89,6 +89,7 @@ form:
             redirects.max_chain_depth:
               type: number
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.MAX_CHAIN_DEPTH
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.MAX_CHAIN_DEPTH_HELP
               default: 10
               validate:
                 type: int
@@ -182,6 +183,7 @@ form:
             log.retention_days:
               type: number
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.RETENTION_DAYS
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.RETENTION_DAYS_HELP
               default: 30
               validate:
                 type: int
@@ -190,6 +192,7 @@ form:
             log.max_size_mb:
               type: number
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.MAX_SIZE_MB
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.MAX_SIZE_MB_HELP
               default: 50
               validate:
                 type: int
@@ -247,6 +250,7 @@ form:
             auto_redirect.status:
               type: select
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.AUTO_STATUS
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.AUTO_STATUS_HELP
               default: 301
               options:
                 301: '301 Moved Permanently'
@@ -286,6 +290,7 @@ form:
             suggestions.bulk_accept_score:
               type: number
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.BULK_ACCEPT_SCORE
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.BULK_ACCEPT_SCORE_HELP
               default: 0.9
               validate:
                 type: number
@@ -315,10 +320,12 @@ form:
             checker.schedule:
               type: cron
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_SCHEDULE
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_SCHEDULE_HELP
               default: '30 3 * * 0'
             checker.timeout:
               type: number
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_TIMEOUT
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_TIMEOUT_HELP
               default: 5
               validate:
                 type: int
@@ -327,6 +334,7 @@ form:
             checker.max_per_run:
               type: number
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_MAX_PER_RUN
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_MAX_PER_RUN_HELP
               default: 500
               validate:
                 type: int
@@ -335,6 +343,7 @@ form:
             checker.check_external:
               type: toggle
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_EXTERNAL
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_EXTERNAL_HELP
               default: 1
               options:
                 1: PLUGIN_ADMIN.YES
@@ -374,6 +383,7 @@ form:
             notifications.dead_targets:
               type: toggle
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.NOTIFY_DEAD_TARGETS
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.NOTIFY_DEAD_TARGETS_HELP
               default: 1
               options:
                 1: PLUGIN_ADMIN.YES
@@ -396,6 +406,7 @@ form:
             stats.keep_days:
               type: number
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.STATS_KEEP_DAYS
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.STATS_KEEP_DAYS_HELP
               default: 90
               validate:
                 type: int

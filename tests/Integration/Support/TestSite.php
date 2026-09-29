@@ -31,7 +31,10 @@ final class TestSite
     /** @var resource|null */
     private $process = null;
 
-    private function __construct(private readonly string $base)
+    /**
+     * @param array<string, string> $ini php.ini settings for the server process (-d key=value)
+     */
+    private function __construct(private readonly string $base, private readonly array $ini = [])
     {
         $this->dir = sys_get_temp_dir() . '/rm-site-' . bin2hex(random_bytes(5));
         $this->port = self::freePort();
@@ -51,13 +54,64 @@ final class TestSite
         return is_string($bin) && $bin !== '' ? $bin : PHP_BINARY;
     }
 
-    public static function create(): self
+    /**
+     * The PHP binary plus, in coverage mode (RM_COVERAGE=<dir>), the flags that make the child collect line coverage
+     * (tests/Support/coverage-prepend.php), followed by $args. Use it for every PHP child that runs plugin code.
+     *
+     * @return list<string>
+     */
+    public static function phpCommand(string ...$args): array
+    {
+        return [self::phpBinary(), ...self::coverageFlags(), ...$args];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function coverageFlags(): array
+    {
+        static $flags = null;
+        if ($flags !== null) {
+            return $flags;
+        }
+        $dir = getenv('RM_COVERAGE');
+        if (!is_string($dir) || $dir === '') {
+            return $flags = [];
+        }
+        $root = dirname(__DIR__, 3);
+        if (!str_starts_with($dir, '/')) {
+            $dir = $root . '/' . $dir;
+        }
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            throw new RuntimeException('Cannot create the coverage directory ' . $dir);
+        }
+        $bin = self::phpBinary();
+        exec(escapeshellarg($bin) . ' -r ' . escapeshellarg('echo extension_loaded("pcov") ? "1" : "0";') . ' 2>/dev/null', $out);
+        if (($out[0] ?? '0') !== '1') {
+            fwrite(STDERR, "RM_COVERAGE is set, but $bin has no pcov extension: the integration run is not measured.\n");
+
+            return $flags = [];
+        }
+        // The children inherit the variable (proc_open without an explicit env).
+        putenv('RM_COVERAGE_DIR=' . realpath($dir));
+
+        return $flags = [
+            '-d', 'auto_prepend_file=' . $root . '/tests/Support/coverage-prepend.php',
+            '-d', 'pcov.enabled=1',
+            '-d', 'pcov.directory=' . $root . '/classes',
+        ];
+    }
+
+    /**
+     * @param array<string, string> $ini php.ini settings for the `php -S` process, e.g. ['opcache.enable_cli' => '1']
+     */
+    public static function create(array $ini = []): self
     {
         $base = self::baseDir();
         if ($base === null) {
             throw new RuntimeException('No Grav test site found. Run scripts/setup-test-site.sh first.');
         }
-        $site = new self($base);
+        $site = new self($base, $ini);
         $site->build();
         $site->start();
 
@@ -244,6 +298,7 @@ final class TestSite
     /** Back to a clean site: default config, baseline pages, no rules, no logs, no test templates. */
     public function reset(): void
     {
+        $this->dumpLogs();
         self::rmTree($this->dir . '/user/config');
         self::copyTree($this->base . '/user/config', $this->dir . '/user/config');
         $this->writeSystemConfig();
@@ -275,8 +330,28 @@ final class TestSite
         }
     }
 
+    /**
+     * RM_LOG_DUMP=<file>: appends the site's grav.log and server.log to that file before a reset or the end of the class,
+     * so a run can be searched afterwards for PHP deprecations and warnings (docs/TESTING.md).
+     */
+    private function dumpLogs(bool $withServerLog = false): void
+    {
+        $file = getenv('RM_LOG_DUMP');
+        if (!is_string($file) || $file === '') {
+            return;
+        }
+        $out = $this->gravLog();
+        if ($withServerLog) {
+            $out .= "\n--- server.log\n" . ($this->readFile('logs/server.log') ?? '');
+        }
+        if (trim($out) !== '') {
+            @file_put_contents($file, "### site {$this->port}\n" . $out . "\n", FILE_APPEND);
+        }
+    }
+
     public function stop(): void
     {
+        $this->dumpLogs(true);
         if (is_resource($this->process)) {
             $status = proc_get_status($this->process);
             if ($status['running']) {
@@ -326,7 +401,12 @@ final class TestSite
 
     private function start(): void
     {
-        $command = [self::phpBinary(), '-S', '127.0.0.1:' . $this->port, 'system/router.php'];
+        // Every notice, warning and deprecation goes to logs/server.log, never into a response body.
+        $flags = ['-d', 'error_reporting=-1', '-d', 'display_errors=0', '-d', 'log_errors=1'];
+        foreach ($this->ini as $key => $value) {
+            array_push($flags, '-d', $key . '=' . $value);
+        }
+        $command = self::phpCommand(...$flags, ...['-S', '127.0.0.1:' . $this->port, 'system/router.php']);
         $process = proc_open(
             $command,
             [0 => ['file', '/dev/null', 'r'], 1 => ['file', $this->dir . '/logs/server.log', 'w'], 2 => ['file', $this->dir . '/logs/server.log', 'a']],

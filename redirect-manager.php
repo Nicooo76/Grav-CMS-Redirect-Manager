@@ -17,6 +17,7 @@ use Grav\Plugin\RedirectManager\Domain\MatchPhase;
 use Grav\Plugin\RedirectManager\Domain\MatchResult;
 use Grav\Plugin\RedirectManager\Domain\StatusCode;
 use Grav\Plugin\RedirectManager\Grav\GravBootstrap;
+use Grav\Plugin\RedirectManager\Grav\McpManifest;
 use Grav\Plugin\RedirectManager\Grav\RedirectLookup;
 use Grav\Plugin\RedirectManager\Grav\RequestContextResult;
 use Grav\Plugin\RedirectManager\Grav\RuleEvents;
@@ -64,6 +65,7 @@ class RedirectManagerPlugin extends Plugin
             'onApiSidebarItems' => ['onApiSidebarItems', 0],
             'onApiPluginPageInfo' => ['onApiPluginPageInfo', 0],
             'onApiDashboardWidgets' => ['onApiDashboardWidgets', 0],
+            'onApiMcpTools' => ['onApiMcpTools', 0],
             // Two listeners: the plugin's REST routes and the auto-redirect routes (pending decisions, badge).
             'onApiRegisterRoutes' => [['onApiRegisterRoutes', 0], ['onApiRegisterAutoRoutes', 0]],
             // Page changes through the API plugin (Admin 2, REST, MCP): automatic redirects. Never fired without the API plugin.
@@ -94,6 +96,8 @@ class RedirectManagerPlugin extends Plugin
         if (PHP_SAPI === 'cli') {
             return;
         }
+        // Only with REDIRECT_MANAGER_TIMING=1 or `debug_timing: true`: one clock read here, one below, no other cost.
+        $timer = $this->timingEnabled() ? hrtime(true) : null;
         try {
             $services = $this->services();
             if (!$services->enabled()) {
@@ -107,6 +111,9 @@ class RedirectManagerPlugin extends Plugin
             }
 
             $result = $services->matcher()->match($request->context, MatchPhase::Early);
+            if ($timer !== null) {
+                $this->emitTiming($timer);
+            }
             if ($result === null) {
                 return;
             }
@@ -313,6 +320,27 @@ class RedirectManagerPlugin extends Plugin
         }
     }
 
+    private function timingEnabled(): bool
+    {
+        $env = getenv('REDIRECT_MANAGER_TIMING');
+        if (is_string($env) && $env !== '' && $env !== '0') {
+            return true;
+        }
+
+        return (bool) $this->config?->get('plugins.' . self::SLUG . '.debug_timing', false);
+    }
+
+    /**
+     * X-Redirect-Manager-Time: microseconds the early phase took (request context, compiled rule cache, match).
+     * Set before the response is built, so it is on redirects and on pages Grav serves afterwards.
+     */
+    private function emitTiming(int|float $startedAt): void
+    {
+        if (!headers_sent()) {
+            header('X-Redirect-Manager-Time: ' . number_format((hrtime(true) - $startedAt) / 1000, 1, '.', ''));
+        }
+    }
+
     private function requestContext(): ?RequestContextResult
     {
         if ($this->request === null) {
@@ -427,8 +455,18 @@ class RedirectManagerPlugin extends Plugin
 
     public function onRegisterPermissions(PermissionsRegisterEvent $event): void
     {
-        $actions = PermissionsReader::fromYaml('plugin://' . self::SLUG . '/permissions.yaml');
+        // Not in the plugin root: GPM names a direct-installed package after the first *.yaml there (D-024).
+        $actions = PermissionsReader::fromYaml('plugin://' . self::SLUG . '/config/permissions.yaml');
         $event->permissions->addActions($actions);
+    }
+
+    /**
+     * MCP tools for the API plugin (GET /api/v1/mcp/tools). Declared in config/mcp.yaml and registered here
+     * because a mcp.yaml in the plugin root breaks `bin/gpm direct-install` (docs/DECISIONS.md D-024).
+     */
+    public function onApiMcpTools(Event $event): void
+    {
+        McpManifest::register($event['tools'], self::SLUG, __DIR__ . '/' . McpManifest::FILE);
     }
 
     /**
@@ -509,11 +547,10 @@ class RedirectManagerPlugin extends Plugin
             return;
         }
         // The page title is rendered verbatim by Admin 2, so translate it here.
-        $title = $this->grav['language']->translate(['PLUGIN_REDIRECT_MANAGER.TITLE']);
         $event['definition'] = [
             'id' => self::SLUG,
             'plugin' => self::SLUG,
-            'title' => is_string($title) && $title !== '' ? $title : 'Redirects',
+            'title' => $this->translated('PLUGIN_REDIRECT_MANAGER.TITLE', 'Redirects'),
             'icon' => 'fa-route',
             'page_type' => 'component',
         ];
@@ -525,7 +562,8 @@ class RedirectManagerPlugin extends Plugin
         $widgets[] = [
             'id' => 'redirect-manager.overview',
             'plugin' => self::SLUG,
-            'label' => 'PLUGIN_REDIRECT_MANAGER.WIDGET.TITLE',
+            // Admin 2 renders the widget label verbatim (the sidebar label is translated by the API plugin).
+            'label' => $this->translated('PLUGIN_REDIRECT_MANAGER.WIDGET.TITLE', 'Redirects overview'),
             'icon' => 'Route',
             'sizes' => ['sm', 'md', 'lg'],
             'defaultSize' => 'md',
@@ -535,5 +573,16 @@ class RedirectManagerPlugin extends Plugin
             'dataEndpoint' => '/redirects/stats',
         ];
         $event['widgets'] = $widgets;
+    }
+
+    /**
+     * The translation of a key, or the fallback when the language service has none (returns nothing, an empty
+     * string or the key itself).
+     */
+    private function translated(string $key, string $fallback): string
+    {
+        $text = $this->grav['language']->translate([$key]);
+
+        return is_string($text) && $text !== '' && $text !== $key ? $text : $fallback;
     }
 }

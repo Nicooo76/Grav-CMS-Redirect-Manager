@@ -24,12 +24,16 @@ import {
   type SuggestionStatus,
   type SuggestionsState,
 } from '../../lib/suggestions';
-import type { BulkAcceptPreview, Rule, StoredSuggestion } from '../../lib/types';
+import type { BulkAcceptPreview, Rule, StoredSuggestion, SuggestionsMeta } from '../../lib/types';
 
+/** POST /redirects/suggestions/generate */
 interface GenerateResult {
+  paths: number;
+  suggested: number;
   created: number;
-  updated: number;
-  total_open: number;
+  improved: number;
+  no_suggestion: number;
+  skipped_with_rule: number;
 }
 
 class SuggestionsStore {
@@ -45,6 +49,8 @@ class SuggestionsStore {
   edits = $state<Record<string, string>>({});
   generating = $state(false);
   threshold = $state(DEFAULT_BULK_SCORE);
+  /** the user moved the slider: the server's default no longer replaces it */
+  #thresholdTouched = false;
   bulkBusy = $state(false);
   preview = $state<BulkAcceptPreview | null>(null);
   previewBusy = $state(false);
@@ -70,13 +76,16 @@ class SuggestionsStore {
       const { data, meta } = await api.get<StoredSuggestion[]>('/redirects/suggestions', toApiQuery(this.list), ctl.signal);
       this.rows = Array.isArray(data) ? data : [];
       this.total = meta.total ?? this.rows.length;
-      if (this.list.min === 0) this.counts[status] = this.total;
+      const m = meta as SuggestionsMeta;
+      // the slider starts at suggestions.bulk_accept_score until the user moves it
+      if (!this.#thresholdTouched && typeof m.bulk_accept_score === 'number') this.threshold = clampThreshold(m.bulk_accept_score);
+      const counts = m.counts;
+      if (counts) this.counts = { open: counts.open ?? 0, accepted: counts.accepted ?? 0, rejected: counts.rejected ?? 0 };
       this.error = null;
       this.loaded = true;
       const ids = new Set(this.rows.map((r) => r.id));
       for (const id of Object.keys(this.edits)) if (!ids.has(id)) delete this.edits[id];
       this.announcement = t('SUGGESTIONS.ANNOUNCE', { label: t(`SUGGESTIONS.STATUS_${status.toUpperCase()}`), n: this.total });
-      void this.loadCounts(status);
     } catch (e) {
       if (isAbort(e)) return;
       this.error = e;
@@ -86,21 +95,6 @@ class SuggestionsStore {
         this.#abort = null;
       }
     }
-  }
-
-  /** Counts of the other statuses (and of this one when a score filter narrows the list). */
-  async loadCounts(skip?: SuggestionStatus): Promise<void> {
-    const need = STATUSES.filter((s) => s !== skip || this.list.min > 0);
-    await Promise.all(
-      need.map(async (s) => {
-        try {
-          const { data, meta } = await api.get<StoredSuggestion[]>('/redirects/suggestions', { status: s });
-          this.counts[s] = meta.total ?? (Array.isArray(data) ? data.length : 0);
-        } catch {
-          /* counts are decoration */
-        }
-      }),
-    );
   }
 
   refresh(): void {
@@ -201,7 +195,7 @@ class SuggestionsStore {
     this.generating = true;
     try {
       const { data } = await api.post<GenerateResult>('/redirects/suggestions/generate');
-      const msg = t('SUGGESTIONS.GENERATED', { created: data?.created ?? 0, updated: data?.updated ?? 0, total: data?.total_open ?? 0 });
+      const msg = t('SUGGESTIONS.GENERATED', { created: data?.created ?? 0, improved: data?.improved ?? 0, none: data?.no_suggestion ?? 0 });
       toast.success(msg);
       this.announcement = msg;
     } catch (e) {
@@ -216,6 +210,7 @@ class SuggestionsStore {
   /* ---------- bulk accept ---------- */
 
   setThreshold(v: number): void {
+    this.#thresholdTouched = true;
     this.threshold = clampThreshold(v);
   }
 
@@ -248,12 +243,14 @@ class SuggestionsStore {
     if (!p || this.previewBusy) return;
     this.previewBusy = true;
     try {
-      const { data } = await api.post<{ created: number }>('/redirects/suggestions/bulk-accept', {
+      const { data } = await api.post<{ count: number; rules?: Rule[]; skipped?: { id: string }[] }>('/redirects/suggestions/bulk-accept', {
         min_score: p.min_score,
         dry_run: false,
         ids: p.rows.map((r) => r.id),
       });
-      toast.success(t('SUGGESTIONS.BULK_DONE', { n: data?.created ?? p.rows.length }));
+      const skipped = data?.skipped?.length ?? 0;
+      toast.success(t('SUGGESTIONS.BULK_DONE', { n: data?.count ?? p.rows.length }));
+      if (skipped > 0) toast.warning(t('SUGGESTIONS.BULK_SKIPPED', { n: skipped }));
       this.preview = null;
     } catch (e) {
       toast.error(describeError(e));

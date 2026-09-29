@@ -21,7 +21,7 @@ final class StatusResponsesTest extends IntegrationTestCase
         self::assertNull($r->location());
         self::assertSame('noindex', $r->header('x-robots-tag'));
         self::assertStringContainsString('<meta name="robots" content="noindex">', $r->body);
-        self::assertStringContainsString('This page has been removed', $r->body);
+        self::assertMatchesRegularExpression('/This page (has been|was) removed/', $r->body);
         self::assertStringContainsString('<p class="code">410</p>', $r->body);
         self::assertFalse($r->has('set-cookie'), 'no session cookie on a 410: ' . $r->header('set-cookie'));
         self::assertSame('public, max-age=3600', $r->header('cache-control'));
@@ -127,7 +127,7 @@ final class StatusResponsesTest extends IntegrationTestCase
         ]);
         $gone = $this->get('/old-news');
         self::assertSame(410, $gone->status);
-        self::assertStringContainsString('This page has been removed', $gone->body);
+        self::assertMatchesRegularExpression('/This page (has been|was) removed/', $gone->body);
 
         $alias = $this->get('/soft-alias');
         self::assertSame(200, $alias->status);

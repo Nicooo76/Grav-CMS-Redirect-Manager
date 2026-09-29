@@ -126,4 +126,19 @@ final class NotFoundLoggingTest extends IntegrationTestCase
             self::assertCount(1, $this->entriesFor('/sqlite-check'));
         }
     }
+
+    public function testTheDataDirectoryProtectsItselfAndKeepsAChangedHtaccess(): void
+    {
+        self::assertDirectoryDoesNotExist($this->site()->dataDir());
+        self::assertSame(404, $this->get('/protect-me')->status);
+
+        $htaccess = (string) $this->site()->readFile('user/data/redirect-manager/.htaccess');
+        self::assertStringContainsString('Require all denied', $htaccess);
+        self::assertStringContainsString('Deny from all', $htaccess);
+        self::assertSame('', $this->site()->readFile('user/data/redirect-manager/index.html'));
+
+        $this->site()->writeFile('user/data/redirect-manager/.htaccess', "# edited by the site owner\n");
+        self::assertSame(404, $this->get('/protect-me-too')->status);
+        self::assertSame("# edited by the site owner\n", $this->site()->readFile('user/data/redirect-manager/.htaccess'));
+    }
 }

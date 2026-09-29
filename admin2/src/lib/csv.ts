@@ -1,23 +1,4 @@
-/** Minimal RFC 4180 CSV helpers (client-side export of selected rules; CSV preview for the import mapping UI). */
-import type { Rule } from './types';
-
-export function csvCell(v: unknown): string {
-  const s = v === null || v === undefined ? '' : String(v);
-  return /[",\r\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-const RULE_COLUMNS = ['source', 'target', 'status', 'match_type', 'enabled', 'priority', 'group', 'tags', 'note'] as const;
-
-export function rulesToCsv(list: Rule[]): string {
-  const head = RULE_COLUMNS.join(',');
-  const rows = list.map((r) =>
-    RULE_COLUMNS.map((c) => {
-      const v = (r as unknown as Record<string, unknown>)[c];
-      return csvCell(Array.isArray(v) ? v.join(' ') : v);
-    }).join(','),
-  );
-  return [head, ...rows].join('\r\n') + '\r\n';
-}
+/** Minimal RFC 4180 CSV reader for the CSV preview of the import mapping UI. */
 
 /** Parses CSV text into rows of cells. Handles quotes, escaped quotes and CRLF. */
 export function parseCsv(text: string, delimiter?: string): string[][] {

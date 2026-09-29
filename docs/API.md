@@ -2,7 +2,7 @@
 
 All routes live under the API plugin prefix (`/api/v1` by default) and use its authentication (API key, JWT in `X-API-Token` or `Authorization: Bearer`, or the admin session). Reads need `api.redirects.read`, writes need `api.redirects.manage`; super admins pass both. Responses use the API plugin envelope `{data, meta?, links?}`; errors are RFC 7807 (`{status, title, detail, errors?}`), validation errors are 422 with `errors: [{field, code, message, severity}]`.
 
-Machine-readable description: `docs/openapi.yaml`. MCP tool mapping: `mcp.yaml`.
+Machine-readable description: `docs/openapi.yaml`. MCP tool mapping: `config/mcp.yaml`.
 
 ## Rule object
 
@@ -63,7 +63,7 @@ Machine-readable description: `docs/openapi.yaml`. MCP tool mapping: `mcp.yaml`.
 | Method | Path | Permission | Purpose |
 |---|---|---|---|
 | GET | `/redirects/suggest` | read | Query `path`, `language`, `limit`: live suggestions for one path. |
-| GET | `/redirects/suggestions` | read | Stored suggestions. Query `status` (`open\|accepted\|rejected`), `min_score`, `source`. |
+| GET | `/redirects/suggestions` | read | Stored suggestions. Query `status` (`open\|accepted\|rejected\|all`), `min_score`, `source`. `meta`: `total` (rows returned) and `counts` `{open, accepted, rejected}` over all stored suggestions that match `min_score` and `source`, ignoring `status`, and `bulk_accept_score` (float): the score bulk accept uses when `min_score` is omitted (`suggestions.bulk_accept_score`), the Admin 2 slider starts there. |
 | POST | `/redirects/suggestions/generate` | manage | Computes suggestions for all open 404 paths. Returns counts. |
 | POST | `/redirects/suggestions/{id}/accept` | manage | Body optional `{target, status}`. Creates a rule (origin `suggestion`). |
 | POST | `/redirects/suggestions/{id}/reject` | manage | |
@@ -77,7 +77,7 @@ Machine-readable description: `docs/openapi.yaml`. MCP tool mapping: `mcp.yaml`.
 | POST | `/redirects/import/preview` | manage | Body `{content, filename?, format?, options?}` (content as text, max `import.max_mb` MB, 413 above; `encoding: base64` for binary safe transport). Returns `ImportPreview` (rows with line, rule, errors, warnings, duplicate flags; counts). |
 | POST | `/redirects/import/commit` | manage | Same body plus `{skip_duplicates, skip_invalid, lines?}`. Returns `{created, skipped, rules}`. Crawler exports create 404 candidates and suggestions instead of rules. |
 | POST | `/redirects/import/sitemap` | manage | Body `{content}` (old sitemap XML, optionally base64 gzip via `encoding: base64`). Returns the diff and creates suggestions for missing paths. |
-| GET | `/redirects/export` | read | Query `format`, `only_enabled`, `group`, `status`, `host`. Returns `{filename, mime, content, skipped}`. |
+| GET | `/redirects/export` | read | Query `format`, `only_enabled`, `group`, `status`, `host`, `ids` (comma separated rule ids: only these rules; unknown ids are ignored; a blank `ids=` is no filter, any other value that matches nothing exports nothing; combines with the other filters). Returns `{filename, mime, content, skipped}`. |
 | GET | `/redirects/site-config` | read | Grav's own `site.redirects`, `site.routes` and `system.pages.redirect_*` settings, read-only. |
 | POST | `/redirects/site-config/import` | manage | Imports `site.redirects`/`site.routes` into plugin rules (does not change `site.yaml`). |
 
@@ -85,14 +85,14 @@ Machine-readable description: `docs/openapi.yaml`. MCP tool mapping: `mcp.yaml`.
 
 | Method | Path | Permission | Purpose |
 |---|---|---|---|
-| GET | `/redirects/stats` | read | Dashboard numbers: `not_found_today`, `not_found_7d`, `not_found_by_day` (30 days), `hits_today`, `hits_7d`, `hits_by_day`, `rules_total`, `rules_active`, `open_suggestions`, `dead_targets`, `pending_deletes`. |
+| GET | `/redirects/stats` | read | Dashboard numbers: `not_found_today`, `not_found_7d`, `not_found_by_day` (30 days), `hits_today`, `hits_7d`, `hits_by_day`, `rules_total`, `rules_active`, `open_suggestions`, `dead_targets`, `pending_deletes`. `meta.permissions` is `{read: bool, manage: bool}`: what the caller may do (same rules as the permission checks: key scope cap, super admin, `api.access` plus `api.redirects.read` / `api.redirects.manage`). `read` is always true here, since the route needs it. `meta.default_status` (int) is the status a new rule gets when `status` is omitted: `redirects.default_status` if above 0, else Grav's `system.pages.redirect_default_code`, else 301. |
 | GET | `/redirects/checks` | read | Last live-check results `{last_run, results}`. |
 | POST | `/redirects/checks/run` | manage | Runs the live check now (rate limited: 429 with `Retry-After`). Body optional `{ids}`. |
 | GET | `/redirects/pages` | read | Page search for the target picker. Query `q`, `language`, `limit`. Rows `{route, title, language, translations}`. |
 | GET | `/redirects/pending` | read | Deleted pages waiting for a decision (delete policy `ask`), oldest first. Rows `{id, title, route, routes, languages, children, children_count, deleted_at, suggested_parent}`; `children` lists at most 50 routes, `suggested_parent` is the nearest ancestor route that still exists (null when none). `meta.total`. |
 | POST | `/redirects/pending/{id}/resolve` | manage | Body `{action: gone\|parent\|redirect\|dismiss, target?}`. `gone`: 410 for the page and its descendants. `parent`: 301 to the nearest ancestor that exists (home page when there is none). `redirect`: 301 to `target` (route starting with `/`, or an absolute URL that passes the host allowlist); `dismiss`: forget it. The created rules go through `RuleValidator`; an error gives 422 and the decision stays pending. Answers `{id, action, created, updated, deleted, notes}` (rules created and re-targeted, ids of removed rules, skipped items with `kind`). An unknown or already resolved id gives 404. |
-| GET | `/redirects/badge` | read | `{count, unseen, pending}`: `count` is what the Admin 2 sidebar shows (`badgeEndpoint`). `unseen` = auto rules the editor has not looked at (only rules that still exist), `pending` = open decisions. |
-| POST | `/redirects/badge/seen` | read | Clears the unseen auto rules (no body). Answers `{count}`. Read permission suffices: it changes no rule. |
+| GET | `/redirects/badge` | read | `{count, unseen, pending}`: `count` is what the Admin 2 sidebar shows (`badgeEndpoint`); it is `null` (JSON null, not 0) when there is nothing to show, so the pill disappears. `unseen` and `pending` are always integers. `unseen` = auto rules the editor has not looked at (only rules that still exist), `pending` = open decisions. |
+| POST | `/redirects/badge/seen` | read | Clears the unseen auto rules (no body). Answers `{count}` (`null` when 0). Read permission suffices: it changes no rule. |
 
 ## Events for other plugins
 
@@ -113,12 +113,12 @@ Where the tables above leave a shape open, this is what the code returns.
 
 **404 monitor.** Rows: `path, hits, first_seen, last_seen, top_referers: [{referer, hits}], daily, ua: {class: hits}, languages: [code], hosts: [host], sample_query, has_rule, best_suggestion, resolved`. `days` may be 1 to 366 (7/30/90 are the UI presets), `class` is one of `browser|bot|monitoring|unknown`. `entries` returns a list of raw entries (newest first, at most 100). `ignore` answers `{pattern, patterns, purged}`, `resolve` `{resolved}`, `DELETE` `{deleted}` (404 when a single path has no entries; `all=1` in the query or `{all: true}` in the body clears the log).
 
-**Suggestions.** Rows: `id, path, target, score, reason, page_title, hits, status, source, created_at, decided_at`. `status=all` lists every state. `generate` looks at the last 30 days (no bots, no paths marked done, no paths a rule already covers) and answers counts (`paths, suggested, created, improved, ...`). `accept` answers 201 `{rule, suggestion}`; a suggestion that was decided before gives 409. `bulk-accept` answers `{min_score, count, rows}` (dry run) or additionally `rules` and `skipped`.
+**Suggestions.** Rows: `id, path, target, score, reason, page_title, hits, status, source, created_at, decided_at`. `status=all` lists every state. `meta.counts` is `{open, accepted, rejected}` (integers) over every stored suggestion that matches `min_score` and `source`, whatever `status` is, so status tabs keep stable numbers; `meta.total` is the number of returned rows. `generate` looks at the last 30 days (no bots, no paths marked done, no paths a rule already covers) and answers counts (`paths, suggested, created, improved, ...`). `accept` answers 201 `{rule, suggestion}` (a path that differs from its target only in case, `/shop/Rucksaecke` to `/shop/rucksaecke`, becomes a case-sensitive rule, otherwise it would loop); a suggestion that was decided before gives 409. `bulk-accept` answers `{min_score, count, rows}` (dry run) or additionally `rules` and `skipped`.
 
 **Import and export.** `formats` rows: `{id, label, import, export, extension, mime}`. Preview and commit accept `{content, filename?, format?, encoding?, options?}` with `options: {columns, delimiter, has_header, default_group, default_status}`; commit adds `skip_duplicates` (default true), `skip_invalid` (default false: any invalid row gives 422 and stores nothing) and `lines`. Every imported rule is validated like a manual one; above 300 rows only the per-rule checks run (`relations_checked` in the preview). Commit answers `{format, created, skipped, rules, rules_truncated, suggestions, not_found}`. Export answers `{filename, mime, content, skipped, lossy, exported}`; `only_enabled` defaults to false. `site-config` answers `{redirects, routes, settings}`, its import `{created, skipped, ...}` like commit.
 
 **Checks.** `GET /redirects/checks` answers `{last_run, results: [{rule_id, source, target, url, status, ok, error, final_url, redirects, duration_ms, checked_at}]}`; `POST .../run` answers `{last_run, checked, dead, results}`, 429 with `Retry-After` inside `checker.manual_interval` seconds.
 
-**MCP.** `mcp.yaml` declares `redirects_list`, `redirects_create`, `redirects_test`, `redirects_top_404`, `redirects_suggest` (live suggestions for one path, `GET /redirects/suggest`) and `redirects_import` (`POST /redirects/import/commit`). The 404 report is `top_404` and not `404_top` because the API plugin requires tool names to start with a letter.
+**MCP.** `config/mcp.yaml` declares `redirects_list`, `redirects_create`, `redirects_test`, `redirects_top_404`, `redirects_suggest` (live suggestions for one path, `GET /redirects/suggest`) and `redirects_import` (`POST /redirects/import/commit`). The 404 report is `top_404` and not `404_top` because the API plugin requires tool names to start with a letter. The manifest is not in the plugin root (a root `mcp.yaml` makes `bin/gpm direct-install` name the plugin "mcp", D-024); the plugin registers it through the API plugin's `onApiMcpTools` event, so `GET /mcp/tools` lists the same tools with the same permission filtering.
 
 **Errors.** 401 without credentials, 403 without permission, 404 unknown id, 409 changed or already decided record, 413 import over the size limit, 422 validation (`errors: [{field, code, message, severity, params?}]`), 429 checks too close together (`Retry-After`), 503 when Grav's config or the HTTP client is not available.

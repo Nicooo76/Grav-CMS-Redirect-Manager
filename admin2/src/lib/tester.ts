@@ -1,5 +1,5 @@
 /** Pure logic of the URL tester: input handling, chain summary, headline classification, trace truncation. */
-import type { TestResponse, TraceStep } from './types';
+import type { FinalInfo, TestResponse, TraceStep } from './types';
 
 export type StatusVariant = 'ok' | 'info' | 'warn' | 'bad' | 'muted';
 
@@ -12,6 +12,7 @@ export type OutcomeKind =
   | 'legal'
   | 'loop'
   | 'depth'
+  | 'excluded'
   | 'error';
 
 export interface ChainStep {
@@ -23,6 +24,8 @@ export interface ChainStep {
   ruleId: string | null;
   /** the last step: where the visitor ends up */
   terminal: boolean;
+  /** the step is an external URL the tester does not request */
+  external?: boolean;
   /** the step that closes a loop (its URL was visited before) */
   loops: boolean;
   variant: StatusVariant;
@@ -40,6 +43,8 @@ export interface Outcome {
   hops: number;
   loop: boolean;
   depth: boolean;
+  /** the redirect leaves the site: the target was not requested */
+  external: boolean;
   /** the chain ends in a redirect whose last URL returns an error status */
   destinationMissing: boolean;
   steps: ChainStep[];
@@ -81,23 +86,26 @@ export function hasLoop(urls: readonly string[]): boolean {
 
 const isRedirect = (status: number) => status >= 300 && status < 400;
 
-/** Turns the API response into the pieces the result card shows. */
+/**
+ * Turns the API response into the pieces the result card shows.
+ *
+ * The API's `chain` has one entry per rule hop (`rule_id` set) and, when the walk ended on a page or a 404,
+ * a last entry without rule (`rule_id: null`, status 200 or 404). It ends without such an entry when a rule
+ * answered for good (410, 451, pass-through), when the target is external, and when the walk stopped early;
+ * `final` then carries the flag (`external`, `loop`, `truncated`, `excluded`).
+ */
 export function summarize(resp: TestResponse, maxDepth = MAX_CHAIN_DEPTH): Outcome {
   const chain = Array.isArray(resp.chain) ? resp.chain : [];
-  const final = resp.final ?? { url: resp.input?.url ?? '', status: 0 };
-  const hops = chain.filter((c) => isRedirect(c.status)).length;
+  const final: FinalInfo = resp.final ?? { url: resp.input?.url ?? '', status: 0 };
+  const first = chain[0];
+  const lastEntry = chain[chain.length - 1];
+  const hops = chain.filter((c) => c.rule_id && isRedirect(c.status)).length;
 
-  const ctxLoop = (resp.context as { loop?: unknown } | undefined)?.loop === true;
-  const lastHop = chain[chain.length - 1];
-  const loop =
-    ctxLoop ||
-    (chain.length > 0 && final.status === 508) ||
-    hasLoop(chain.map((c) => c.url)) ||
-    // the visitor is sent back to a URL that was already visited
-    (!!lastHop && isRedirect(lastHop.status) && chain.some((c) => sameUrl(c.url, final.url)));
-  const depth = !loop && chain.length >= maxDepth && isRedirect(chain[chain.length - 1].status);
+  const loop = final.loop === true || (resp.context as { loop?: unknown } | undefined)?.loop === true;
+  const depth = !loop && (final.truncated === true || (chain.length > maxDepth && !!lastEntry?.rule_id && isRedirect(lastEntry.status)));
+  const excluded = final.excluded === true || (resp.context as { excluded?: unknown } | undefined)?.excluded === true;
+  const external = final.external === true;
 
-  // steps: every hop, plus the place the visitor ends up when it differs from the last hop's URL
   const steps: ChainStep[] = chain.map((c, i) => ({
     n: i + 1,
     url: c.url,
@@ -107,18 +115,13 @@ export function summarize(resp: TestResponse, maxDepth = MAX_CHAIN_DEPTH): Outco
     loops: false,
     variant: statusVariant(c.status),
   }));
-  const last = chain[chain.length - 1];
-  if (!last || !sameUrl(last.url, final.url) || loop) {
-    steps.push({
-      n: steps.length + 1,
-      url: final.url,
-      status: loop ? null : final.status,
-      ruleId: null,
-      terminal: true,
-      loops: loop,
-      variant: loop ? 'bad' : statusVariant(final.status),
-    });
-  } else {
+  const endsOnRule = !!lastEntry && !!lastEntry.rule_id;
+  if (loop) {
+    steps.push({ n: steps.length + 1, url: final.url, status: null, ruleId: null, terminal: true, loops: true, variant: 'bad' });
+  } else if (endsOnRule && isRedirect(lastEntry.status) && !depth) {
+    // the walk left the chain: an external target (not requested) or a URL the visitor ends up on
+    steps.push({ n: steps.length + 1, url: final.url, status: external ? null : final.status, ruleId: null, terminal: true, loops: false, variant: external ? 'muted' : statusVariant(final.status), external });
+  } else if (steps.length) {
     steps[steps.length - 1].terminal = true;
   }
 
@@ -137,18 +140,18 @@ export function summarize(resp: TestResponse, maxDepth = MAX_CHAIN_DEPTH): Outco
     status = null;
     headlineKey = 'TESTER.HEAD_DEPTH';
     variant = 'bad';
-  } else if (last) {
-    status = isRedirect(last.status) ? chain[0].status : last.status;
-    if (last.status === 410) {
+  } else if (first?.rule_id) {
+    status = first.status;
+    if (status === 410) {
       kind = 'gone';
       headlineKey = 'TESTER.HEAD_GONE';
-    } else if (last.status === 451) {
+    } else if (status === 451) {
       kind = 'legal';
       headlineKey = 'TESTER.HEAD_LEGAL';
-    } else if (last.status === 200) {
+    } else if (status === 200) {
       kind = 'passthrough';
       headlineKey = 'TESTER.HEAD_PASSTHROUGH';
-    } else if (isRedirect(last.status)) {
+    } else if (isRedirect(status)) {
       kind = 'redirect';
       headlineKey = 'TESTER.HEAD_REDIRECT';
     } else {
@@ -158,23 +161,29 @@ export function summarize(resp: TestResponse, maxDepth = MAX_CHAIN_DEPTH): Outco
     variant = statusVariant(status);
   } else {
     // no rule applied
-    status = final.status || (resp.page_exists ? 200 : 404);
-    if (status >= 200 && status < 300) {
+    status = first?.status ?? (final.status || (resp.page_exists ? 200 : 404));
+    if (excluded) {
+      kind = 'excluded';
+      headlineKey = 'TESTER.HEAD_EXCLUDED';
+      variant = 'muted';
+    } else if (status >= 200 && status < 300) {
       kind = 'found';
       headlineKey = 'TESTER.HEAD_FOUND';
+      variant = statusVariant(status);
     } else if (status === 404) {
       kind = 'notfound';
       headlineKey = 'TESTER.HEAD_NOTFOUND';
+      variant = statusVariant(status);
     } else {
       kind = 'error';
       headlineKey = 'TESTER.HEAD_ERROR';
+      variant = statusVariant(status);
     }
-    variant = statusVariant(status);
   }
 
-  const destinationMissing = kind === 'redirect' && final.status >= 400;
+  const destinationMissing = kind === 'redirect' && !external && final.status >= 400;
 
-  return { kind, status, variant, headlineKey, finalUrl: final.url, hops, loop, depth, destinationMissing, steps };
+  return { kind, status, variant, headlineKey, finalUrl: final.url, hops, loop, depth, external, destinationMissing, steps };
 }
 
 /** First `limit` trace rows unless the user asked for all of them. */

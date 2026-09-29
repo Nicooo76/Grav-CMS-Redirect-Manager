@@ -11,6 +11,7 @@ use Grav\Plugin\RedirectManager\App\Exception\InvalidInputException;
 use Grav\Plugin\RedirectManager\App\Exception\PayloadTooLargeException;
 use Grav\Plugin\RedirectManager\Domain\MatchPhase;
 use Grav\Plugin\RedirectManager\Domain\RequestContext;
+use Grav\Plugin\RedirectManager\Domain\Rule;
 use Grav\Plugin\RedirectManager\Domain\RuleSource;
 use Grav\Plugin\RedirectManager\Domain\StatusCode;
 use Grav\Plugin\RedirectManager\Grav\RuleEvents;
@@ -295,6 +296,9 @@ final class ImportExportService
     // ---------------------------------------------------------------- export
 
     /**
+     * Query: `format`, `only_enabled`, `group`, `status`, `host`, and `ids` (comma separated rule ids; unknown ids
+     * are ignored, a blank value means no filter). All filters combine with AND.
+     *
      * @param array<mixed> $query
      *
      * @return array{filename: string, mime: string, content: string, skipped: list<array{rule_id: string, code: string, reason: string}>, lossy: list<array{rule_id: string, code: string, reason: string}>, exported: int}
@@ -329,7 +333,13 @@ final class ImportExportService
             exportHost: is_string($host) && trim($host) !== '' ? trim($host) : null,
         );
 
-        $result = (new Exporter($this->services->clock()))->export($this->rules->all(), $format, $options);
+        $rules = $this->rules->all();
+        $ids = self::idFilter($query['ids'] ?? null);
+        if ($ids !== null) {
+            $rules = array_values(array_filter($rules, static fn (Rule $r): bool => isset($ids[$r->id])));
+        }
+
+        $result = (new Exporter($this->services->clock()))->export($rules, $format, $options);
         $note = static fn (ExportNote $n): array => $n->toArray();
 
         return [
@@ -357,6 +367,38 @@ final class ImportExportService
     }
 
     // ---------------------------------------------------------------- internals
+
+    /**
+     * The `ids` filter of an export: comma separated rule ids (or a list). Null means no filter, which is the case
+     * for an absent or blank value; any other value filters, so ids that match nothing export nothing.
+     *
+     * @return array<string, true>|null ids as keys
+     */
+    private static function idFilter(mixed $value): ?array
+    {
+        if (is_string($value)) {
+            if (trim($value) === '') {
+                return null;
+            }
+            $parts = explode(',', $value);
+        } elseif (is_array($value)) {
+            $parts = array_filter($value, is_string(...));
+            if ($parts === []) {
+                return null;
+            }
+        } else {
+            return null;
+        }
+        $ids = [];
+        foreach ($parts as $part) {
+            $part = trim($part);
+            if ($part !== '') {
+                $ids[$part] = true;
+            }
+        }
+
+        return $ids;
+    }
 
     /**
      * Parses the upload and validates every valid row.

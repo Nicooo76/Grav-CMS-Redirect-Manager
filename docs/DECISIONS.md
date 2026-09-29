@@ -50,9 +50,9 @@ Admin 2 gives a plugin exactly one page route (`/plugin/<slug>`). Rules, 404 mon
 
 The API plugin's `openapi.yaml` covers core routes only and has no extension hook. The plugin ships `docs/openapi.yaml` for its own routes.
 
-## D-013: MCP tools through `mcp.yaml`
+## D-013: MCP tools through a tool manifest
 
-grav-mcp reads tool manifests from enabled plugins. The plugin ships `mcp.yaml` with prefix `redirects`, which yields the tool names from the brief (`redirects_list`, `redirects_create`, `redirects_test`, `redirects_404_top`, `redirects_suggest`, `redirects_import`). Imports use a JSON body with the file content as a string, because MCP manifests do not support multipart.
+grav-mcp reads the tools of enabled plugins from `GET /api/v1/mcp/tools`. The plugin declares them in a manifest (`config/mcp.yaml`, see D-024 for why it is not in the plugin root) with prefix `redirects`, which yields `redirects_list`, `redirects_create`, `redirects_test`, `redirects_top_404` (not `404_top`: a tool name must start with a letter), `redirects_suggest`, `redirects_import`. Imports use a JSON body with the file content as a string, because MCP manifests do not support multipart.
 
 ## D-014: Automatic redirects are planned by a pure planner, applied in one transaction
 
@@ -77,3 +77,40 @@ Change it: the plan format (`AutoPlan`) is the seam; the applier never decides.
 ## D-017: Scheduler jobs are static callables, one per concern
 
 Callable jobs run inside the scheduler process, where Grav and the plugin are loaded. Three jobs instead of one so that schedules and enabled states (`user/config/scheduler.yaml`) are independent: hourly maintenance, the link check on `checker.schedule`, and the digest. A step of the maintenance job that fails is recorded and the next still runs. The digest goes through `$grav['Email']`; without the email plugin (or with engine `none`) it logs and does nothing. Jobs cannot see the request URL, so live checks and mail links use the `base_url` setting.
+
+## D-018: The page index walks the page tree once per supported language
+
+Grav holds one language's page tree, and a folder that has no file in any language of the active fallback chain (`default.de.md` and nothing else, active language `en`) is only an empty placeholder in it. Reading `translatedLanguages()` per page cannot find such pages. `Grav/GravPageIndexBuilder` therefore sets each supported language active (`Language::setActive()` plus `resetFallbackPageExtensions()`, because Grav caches the fallback extension list under a language-independent key), calls `Pages::reset()`, takes the pages whose own file is in that language (`default.md` without extension counts as the default language), and restores the original language and tree at the end (the original language goes last, so no extra reset is needed; an unset language is written back by reflection because `setActive()` cannot unset). Cost: one tree build per language when Grav's page cache is off, one cache read per language when it is on; the result is cached under a stamp of the page files that does not depend on the language (Grav's `getSimplePagesHash()` with the page cache on, else a scan of `*.md` and `*.yaml`). Only API, CLI and scheduler runs build the index, never a frontend request.
+
+## D-019: The data directory protects itself
+
+`user/data/redirect-manager/` gets an `.htaccess` (`Require all denied`, `Deny from all` for Apache 2.2) and an empty `index.html` when the plugin first writes there. Existing files are left alone. Grav's own `.htaccess` (and its nginx and Caddy samples in `webserver-configs/`) already deny `user/data/` except media files; rules, IP addresses and 404 logs should not depend on one layer. nginx and IIS ignore `.htaccess`, so on those servers Grav's server config remains the only protection.
+
+## D-020: The plugin can time itself, and nothing else does
+
+Proof that 10,000 rules cost well under a millisecond per request needs a measurement inside a real request. With `debug_timing` or `REDIRECT_MANAGER_TIMING=1` the early phase reports `X-Redirect-Manager-Time` in microseconds. It is off by default, is not part of the settings form, and not documented for site owners beyond docs/PERFORMANCE.md. `scripts/benchmark-request.sh` and the `benchmark` group of the integration suite use it.
+
+## D-021: One language file, generated in part
+
+`languages.yaml` holds every text of the plugin: settings (`CONFIG`), permissions, front-end pages, the widget label, the issue codes of imports (`IMPORT.ISSUE.<CODE>`) and of rule validation (`VALIDATION.<CODE>`), and the Admin 2 texts under `UI`. The `UI` section is generated: `npm run i18n` (in `admin2/`) compiles `admin2/src/i18n/{en,de}/*.ts` into it and leaves every other section and comment alone. Codes without an entry fall back to the English message the server sends. The page bundle ships only the shell strings as English fallback (`src/lib/i18n-fallback.ts`); Admin 2 loads the dictionary before it shows a plugin page and the API plugin merges the English texts under any language, so the fallback matters only for a stale dictionary cache. Keeping all 788 strings in the bundle cost 41 KB raw and 13 KB gzip. German uses "Sie", like Admin 2's own translations. `tests/Unit/LanguagesTest.php` and `admin2/src/i18n-yaml.test.ts` keep the file complete.
+
+## D-022: The UI learns what the user may do from `GET /redirects/stats`
+
+`meta.permissions` `{read, manage}` uses the same check as the controllers (`BaseController::may()` calls `requirePermission()`), so key scope caps, super admins and `api.access` count the same way. The UI hides or disables write controls when `manage` is false and says why. The server still refuses every write with 403; the flags are convenience, not protection. `meta.default_status` tells the editor which status a new rule starts with.
+
+## D-023: The sidebar badge is `null` at zero
+
+Admin 2 draws the pill of a sidebar item whenever the value is not null or undefined, so `count: 0` shows a "0". `GET /redirects/badge` and `POST /redirects/badge/seen` answer `count: null` when nothing is unseen and nothing is pending. The live update through `grav:sidebar:badge` ignores null in Admin 2, so the UI sends 0 when the last item is cleared: the pill then reads "0" until the next reload. That is Admin 2 behaviour; hiding it live would need a change there.
+
+## D-024: Only three yaml files in the plugin root; permissions and MCP manifest live in `config/`
+
+`bin/gpm direct-install` names the package after the first `*.yaml` in the ZIP root, alphabetically, ignoring only `blueprints.yaml` and `languages.yaml` (`GPM::getPackageName()`, Grav 2.2.2). With `mcp.yaml` and `permissions.yaml` in the root, both sorting before `redirect-manager.yaml`, GPM installed the plugin as `user/plugins/mcp`. Renaming was no option (`redirect-manager.yaml` is the plugin's config and must keep its name), so the root holds exactly `blueprints.yaml`, `languages.yaml` and `redirect-manager.yaml`:
+
+- `permissions.yaml` moved to `config/permissions.yaml`; `onRegisterPermissions` reads `plugin://redirect-manager/config/permissions.yaml`.
+- The MCP manifest moved to `config/mcp.yaml`. The API plugin only looks for `plugins://<slug>/mcp.yaml`, so `onApiMcpTools` parses the file and calls `registerPlugin()` and `add()` on the event's `McpToolCollector` (`classes/Grav/McpManifest.php`). That is the collector's public runtime route and it runs the same validation, prefix rule (`{prefix}_{name}`), duplicate check and warnings as a root manifest; permission filtering in `McpController` works on the collected tools and does not care where they came from. The tool names did not change.
+
+Cost: the ETag of `GET /mcp/tools` is built from the enabled-plugin set and the mtimes of root `mcp.yaml` files only. Tools added through `onApiMcpTools` do not move it, so after a plugin update that changes a tool, a client that sends `If-None-Match` keeps its cached list until the set of enabled plugins changes (grav-mcp reads the list at startup anyway). `scripts/build-release.sh` fails when the ZIP has any other root `*.yaml`; `tests/Unit/PluginLayoutTest.php` fails in the repository. The `bin/gpm` step of `scripts/test-release.sh` is a required check in CI.
+
+## D-025: Hit and 404 writers retry until they hold the current file, and never give up early
+
+Both append-only logs (`Stats/HitRecorder`, `NotFound/JsonlLogStore`) are rewritten by rename while writers run: `StatsStore::aggregate()` renames the day file, `purge()`, `deletePath()` and rotation replace or delete it. A writer opens the file, locks it, checks that the path still points at the file it locked, and starts over otherwise; the aggregator locks the renamed file before it reads it. That protocol is lossless, and the code did not change. What lost hits was around it: `HitRecorder` allowed 5 attempts and then threw ("kept changing while writing"), and it threw "Cannot open hit log" when a concurrent writer had just created the directory. `StatsStoreTest::testRecordingWhileAggregatingLosesAndDuplicatesNothing` ran the aggregator in a loop without a pause, so a loaded machine (writers descheduled between open and lock) hit the limit in about 4 of 5 runs at 16 parallel test runs; the failing worker dropped its remaining hits (the 3,983 of 4,000). Both limits are now 1,000 attempts, meant to stop a broken file system and not to be reached, and a failed open creates the directory and retries once before it counts as an error. `HitRecorder` has an optional `afterOpen` hook (tests only) that runs an aggregation in the window between open and lock; `HitRecorderAggregationRaceTest` uses it. Not changed: `flock()` results are still not checked, because a file system without lock support (some network mounts) would otherwise lose every hit.

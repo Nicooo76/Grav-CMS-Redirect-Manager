@@ -15,5 +15,6 @@ const en: Record<string, string> = {
   'WIDGET.EMPTY_TITLE': 'No redirects yet',
   'WIDGET.EMPTY_TEXT': 'Create a redirect and this card shows 404s, hits and open suggestions.',
   'WIDGET.EMPTY_CTA': 'Create the first redirect',
+  'WIDGET.PENDING': '{n, plural, one {# deleted page waits for a decision} other {# deleted pages wait for a decision}}',
 };
 export default en;

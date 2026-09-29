@@ -146,5 +146,15 @@ const en: Record<string, string> = {
   'EDITOR.SAVE': 'Save changes',
   'EDITOR.CREATED': 'Redirect created',
   'EDITOR.SAVED': 'Redirect saved',
+  'EDITOR.TITLE_VIEW': 'Redirect',
+  'EDITOR.HINT_EXACT_TO_WILDCARD': 'This looks like a wildcard pattern. With Exact, the * matches only a literal asterisk.',
+  'EDITOR.HINT_EXACT_TO_REGEX': 'This looks like a regular expression. With Exact, the text is compared as written.',
+  'EDITOR.HINT_WILDCARD_TO_REGEX': 'Anchors, groups and character classes only work as a regular expression. With Wildcard they match literally.',
+  'EDITOR.HINT_REGEX_TO_WILDCARD': 'In a regular expression, a lone * repeats the character before it. If you meant "anything after /blog/", use Wildcard.',
+  'EDITOR.HINT_SWITCH_WILDCARD': 'Switch to wildcard',
+  'EDITOR.HINT_SWITCH_REGEX': 'Switch to regex',
+  'EDITOR.STATUS_DEFAULT_NOTE': 'New rules start with {code}, the default of this site. Use 301 if the page moved for good.',
+  'EDITOR.STATUS_TEMP_NOTE': '{code} tells search engines the move is temporary. Use 301 if the page moved for good.',
+  'EDITOR.USE_301': 'Use 301',
 };
 export default en;

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Grav\Plugin\RedirectManager\Tests\Integration;
 
+use Grav\Plugin\RedirectManager\Tests\Integration\Support\AccountFactory;
+use Grav\Plugin\RedirectManager\Tests\Integration\Support\ApiClient;
 use Grav\Plugin\RedirectManager\Tests\Integration\Support\ApiResponse;
 use Grav\Plugin\RedirectManager\Tests\Integration\Support\StaticServer;
 use PHPUnit\Framework\Attributes\Group;
@@ -16,6 +18,16 @@ final class ApiSystemTest extends ApiTestCase
     private const BROWSER = 'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/120 Safari/537.36';
 
     private static ?StaticServer $static = null;
+
+    private static string $editorPassword = '';
+
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+        $site = self::$site;
+        self::assertNotNull($site);
+        self::$editorPassword = AccountFactory::create($site, 'rmeditor', ['api' => ['access' => true, 'redirects' => ['read' => true, 'manage' => true]]]);
+    }
 
     public static function tearDownAfterClass(): void
     {
@@ -65,6 +77,44 @@ final class ApiSystemTest extends ApiTestCase
             self::assertSame(date('Y-m-d'), array_key_last($data[$series]));
             self::assertSame(0, array_sum($data[$series]));
         }
+    }
+
+    public function testStatsTellWhatTheCallerMayDo(): void
+    {
+        $admin = $this->api->get('/redirects/stats');
+        self::assertSame(['read' => true, 'manage' => true], $admin->meta()['permissions'] ?? null, 'super admin');
+        self::assertIsInt($admin->meta()['default_status'] ?? null);
+        $this->site()->writeSystemConfig(['pages' => ['redirect_default_code' => 308]]);
+        self::assertSame(308, $this->api->get('/redirects/stats')->meta()['default_status'] ?? null, 'no plugin setting: Grav redirect_default_code');
+        $this->site()->writePluginConfig(['redirects' => ['default_status' => 302]]);
+        self::assertSame(302, $this->api->get('/redirects/stats')->meta()['default_status'] ?? null, 'redirects.default_status wins over Grav');
+
+        $editor = ApiClient::login($this->site(), 'rmeditor', self::$editorPassword)->get('/redirects/stats');
+        self::assertSame(200, $editor->status, $editor->describe());
+        self::assertSame(['read' => true, 'manage' => true], $editor->meta()['permissions'] ?? null, 'read and manage');
+
+        $reader = $this->reader->get('/redirects/stats');
+        self::assertSame(200, $reader->status, $reader->describe());
+        self::assertSame(['read' => true, 'manage' => false], $reader->meta()['permissions'] ?? null, 'api.access and read only');
+        self::assertArrayHasKey('rules_total', $reader->data(), 'the data part is the same');
+
+        self::assertSame(403, $this->basic->get('/redirects/stats')->status, 'no redirect permission: no stats at all');
+    }
+
+    public function testDashboardWidgetAndSidebarLabelsAreTranslated(): void
+    {
+        $widgets = $this->api->get('/dashboard/widgets');
+        self::assertSame(200, $widgets->status, $widgets->describe());
+        $rows = array_column((array) ($widgets->data()['widgets'] ?? []), null, 'id');
+        self::assertArrayHasKey('redirect-manager.overview', $rows);
+        $label = $rows['redirect-manager.overview']['label'];
+        self::assertIsString($label);
+        self::assertNotSame('', $label);
+        self::assertStringStartsNotWith('PLUGIN_REDIRECT_MANAGER', $label, 'Admin 2 renders the widget label verbatim: it must not be the raw key');
+
+        $sidebar = array_column((array) $this->api->get('/sidebar/items')->data(), null, 'id');
+        self::assertArrayHasKey('redirect-manager', $sidebar);
+        self::assertStringStartsNotWith('PLUGIN_REDIRECT_MANAGER', (string) $sidebar['redirect-manager']['label'], 'the API plugin translates sidebar labels');
     }
 
     public function testStatsCountHitsAnd404sAndRules(): void
@@ -284,6 +334,15 @@ final class ApiSystemTest extends ApiTestCase
         self::assertSame([], $this->api->get('/redirects/pages', ['q' => 'ueber', 'language' => 'en'])->data());
     }
 
+    public function testPagesListsPagesThatExistOnlyInANonDefaultLanguage(): void
+    {
+        $this->multilanguagePages();
+        $this->site()->writePage('nur-de', 'Nur Deutsch', 'x', 'de', '40');
+        $rows = $this->api->get('/redirects/pages', ['q' => 'nur'])->data();
+        self::assertSame([['route' => '/nur-de', 'title' => 'Nur Deutsch', 'language' => 'de', 'translations' => []]], $rows);
+        self::assertContains('/nur-de', array_column($this->api->get('/redirects/pages', ['language' => 'de'])->data(), 'route'));
+    }
+
     // ------------------------------------------------------------------ MCP
 
     /**
@@ -307,11 +366,11 @@ final class ApiSystemTest extends ApiTestCase
         $response = $this->api->get('/mcp/tools');
         $tools = $this->redirectTools($response);
         self::assertSame(['redirects_list', 'redirects_create', 'redirects_test', 'redirects_top_404', 'redirects_suggest', 'redirects_import'], array_keys($tools));
-        self::assertSame([], $response->data()['warnings'], 'mcp.yaml is valid: no warnings');
+        self::assertSame([], $response->data()['warnings'], 'config/mcp.yaml is valid: no warnings');
         $plugin = array_values(array_filter($response->data()['plugins'], static fn (array $p): bool => $p['slug'] === 'redirect-manager'))[0];
         self::assertSame(['Redirect Manager', 6], [$plugin['name'], $plugin['tools']]);
 
-        $yaml = Yaml::parseFile(__DIR__ . '/../../mcp.yaml');
+        $yaml = Yaml::parseFile(__DIR__ . '/../../config/mcp.yaml');
         foreach ($yaml['tools'] as $definition) {
             $tool = $tools[$yaml['prefix'] . '_' . $definition['name']];
             self::assertSame([$definition['method'], $definition['path'], $definition['permission']], [$tool['method'], $tool['path'], $tool['permission']], $tool['name']);

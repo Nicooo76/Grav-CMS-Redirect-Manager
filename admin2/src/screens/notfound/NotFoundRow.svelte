@@ -12,6 +12,7 @@
   import { hrefFor, linkClick } from '../../lib/router.svelte';
   import { formatScore } from '../../lib/suggestions';
   import type { NotFoundRow } from '../../lib/types';
+  import { can } from '../../lib/state/app.svelte';
   import { notFound } from './store.svelte';
 
   interface Props {
@@ -39,12 +40,16 @@
       icon: open ? EyeOff : Eye,
       onselect: () => notFound.toggleEntries(row.path),
     },
-    row.resolved
-      ? { label: t('NOTFOUND.ACT_REOPEN'), icon: Undo2, onselect: () => notFound.resolve(row, false) }
-      : { label: t('NOTFOUND.ACT_DONE'), icon: Check, onselect: () => notFound.resolve(row, true) },
-    { label: t('NOTFOUND.ACT_IGNORE'), icon: Ban, onselect: () => notFound.ignore(row) },
-    { separator: true, label: '' },
-    { label: t('NOTFOUND.ACT_DELETE'), icon: Trash2, danger: true, onselect: () => notFound.deleteEntries(row) },
+    ...(can.manage
+      ? [
+          row.resolved
+            ? { label: t('NOTFOUND.ACT_REOPEN'), icon: Undo2, onselect: () => notFound.resolve(row, false) }
+            : { label: t('NOTFOUND.ACT_DONE'), icon: Check, onselect: () => notFound.resolve(row, true) },
+          { label: t('NOTFOUND.ACT_IGNORE'), icon: Ban, onselect: () => notFound.ignore(row) },
+          { separator: true, label: '' },
+          { label: t('NOTFOUND.ACT_DELETE'), icon: Trash2, danger: true, onselect: () => notFound.deleteEntries(row) },
+        ]
+      : []),
   ]);
 </script>
 
@@ -93,7 +98,7 @@
         <button
           type="button"
           class="sugg"
-          disabled={busy}
+          disabled={busy || !can.manage}
           title={t('NOTFOUND.SUGGESTION_TITLE', { target: sugg.target, score: formatScore(sugg.score, locale()) })}
           aria-label={t('NOTFOUND.SUGGESTION_TITLE', { target: sugg.target, score: formatScore(sugg.score, locale()) })}
           onclick={() => notFound.createRedirect(row)}
@@ -107,7 +112,7 @@
     <div class="acts">
       {#if row.has_rule}
         <Button href={hrefFor({ name: 'rules', query: { q: row.path } })} onclick={linkClick} aria-label={t('NOTFOUND.EDIT_RULE_FOR', { path: row.path })}>{t('NOTFOUND.EDIT_RULE')}</Button>
-      {:else}
+      {:else if can.manage}
         <Button loading={busy} aria-label={t('NOTFOUND.CREATE_FOR', { path: row.path })} onclick={() => notFound.createRedirect(row)}>
           <Plus size={14} />{t('NOTFOUND.CREATE')}
         </Button>

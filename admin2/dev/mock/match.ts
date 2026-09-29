@@ -356,18 +356,24 @@ export function runTest(sorted: readonly Rule[], pageExists: (key: string) => bo
   let first: EvalOut | null = null;
   let cur = u0;
   let loop = false;
-  let final = { url: u0.href, status: 404 };
   let lastExists = false;
   let language = body.language ?? '';
 
+  const local = (u: URL) => u.pathname + u.search;
+  let final: NonNullable<TestResponse['final']> = { url: local(u0), status: 404 };
+  let lastStatus = 404;
   for (let i = 0; ; i++) {
     const { lang, path } = splitLanguage(cur.pathname);
     if (i === 0) language = body.language ?? lang ?? defaultLanguage;
     else language = lang ?? language;
     const key = cur.host + cur.pathname + cur.search;
-    if (seen.has(key) || i >= 10) {
+    if (seen.has(key)) {
       loop = true;
-      final = { url: cur.href, status: 508 };
+      final = { url: local(cur), status: lastStatus, loop: true };
+      break;
+    }
+    if (i >= 10) {
+      final = { url: local(cur), status: lastStatus, truncated: true };
       break;
     }
     seen.add(key);
@@ -381,25 +387,37 @@ export function runTest(sorted: readonly Rule[], pageExists: (key: string) => bo
     if (i === 0) first = out;
     const res = out.result;
     if (!res) {
-      final = { url: cur.href, status: exists ? 200 : 404 };
+      // the walk ends on a page (200) or a 404: the chain closes with an entry without rule
+      const status = exists ? 200 : 404;
+      chain.push({ url: local(cur), status, rule_id: null, location: null });
+      final = { url: local(cur), status };
       break;
     }
-    chain.push({ url: cur.href, status: res.status, rule_id: res.rule_id });
-    if (res.status === 200 || res.status >= 400) {
-      final = { url: cur.href, status: res.status };
+    lastStatus = res.status;
+    const redirects = res.status >= 300 && res.status < 400;
+    chain.push({ url: local(cur), status: res.status, rule_id: res.rule_id, location: redirects ? res.location : null });
+    if (!redirects) {
+      final = { url: local(cur), status: res.status };
       break;
     }
     const next = parseUrl(res.location);
     if (!res.location.startsWith('/') && next.host !== host) {
-      final = { url: res.location, status: 200 };
+      final = { url: res.location, status: 200, external: true };
       break;
     }
     cur = res.location.startsWith('/') ? new URL(res.location, cur.origin) : next;
   }
 
   return {
-    input: { url: body.url, method: body.method ?? 'GET', headers: body.headers ?? {}, cookies, language: body.language ?? null, phase: body.phase ?? null },
-    context: { host, scheme, path: splitLanguage(u0.pathname).path, query: u0.search.replace(/^\?/, ''), language: body.language ?? splitLanguage(u0.pathname).lang ?? defaultLanguage, default_language: defaultLanguage, loop },
+    input: { url: body.url, method: body.method ?? 'GET', phase: body.phase ?? 'any' },
+    context: {
+      path: splitLanguage(u0.pathname).path,
+      query: Object.fromEntries(u0.searchParams),
+      host, scheme,
+      language: body.language ?? splitLanguage(u0.pathname).lang ?? defaultLanguage,
+      base_path: '', language_prefix: splitLanguage(u0.pathname).lang ? '/' + splitLanguage(u0.pathname).lang : '',
+      excluded: /^\/(admin|api|user|system|vendor|cache|logs)(\/|$)/.test(u0.pathname),
+    },
     result: first?.result ?? null,
     chain,
     final,

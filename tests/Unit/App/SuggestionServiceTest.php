@@ -194,6 +194,26 @@ final class SuggestionServiceTest extends AppTestCase
         self::assertStringStartsWith('s', $rows[0]['id']);
     }
 
+    public function testListWithCountsIgnoresTheStatusFilter(): void
+    {
+        $this->hit(self::TYPO);
+        $this->svc()->generate();
+        $id = $this->svc()->list()[0]['id'];
+
+        $open = $this->svc()->listWithCounts();
+        self::assertSame(['open' => 1, 'accepted' => 0, 'rejected' => 0], $open['counts']);
+        self::assertCount(1, $open['rows']);
+
+        $this->svc()->reject($id);
+        $rejected = $this->svc()->listWithCounts(['status' => 'rejected']);
+        self::assertSame(['open' => 0, 'accepted' => 0, 'rejected' => 1], $rejected['counts']);
+        self::assertCount(1, $rejected['rows']);
+        self::assertSame(['open' => 0, 'accepted' => 0, 'rejected' => 1], $this->svc()->listWithCounts()['counts'], 'the default open filter does not hide the other counts');
+        self::assertSame([], $this->svc()->listWithCounts()['rows']);
+        self::assertSame(['open' => 0, 'accepted' => 0, 'rejected' => 0], $this->svc()->listWithCounts(['min_score' => 0.99])['counts'], 'min_score narrows the counts');
+        self::assertSame(['open' => 0, 'accepted' => 0, 'rejected' => 0], $this->svc()->listWithCounts(['source' => 'sitemap'])['counts'], 'so does source');
+    }
+
     public function testGenerateFiresOnSuggestionCreatedOnce(): void
     {
         $this->hit(self::TYPO);
@@ -594,6 +614,19 @@ final class SuggestionServiceTest extends AppTestCase
         self::assertSame(['onRedirectRuleSaved'], $this->eventNames());
         self::assertSame('create', $this->events[0]['payload']['action']);
         self::assertSame([], $this->svc()->list());
+    }
+
+    public function testAcceptMakesAPathThatDiffersOnlyInCaseACaseSensitiveRule(): void
+    {
+        $id = $this->record('/shop/Rucksaecke', '/shop/rucksaecke', 0.97);
+
+        $rule = $this->svc()->accept($id)['rule'];
+
+        self::assertTrue($rule['case_sensitive']);
+        self::assertSame('/shop/Rucksaecke', $rule['source']);
+        self::assertSame('/shop/rucksaecke', $rule['target']);
+        self::assertSame(301, $this->app->tester()->test(['url' => '/shop/Rucksaecke'])['result']['status'] ?? null);
+        self::assertNull($this->app->tester()->test(['url' => '/shop/rucksaecke'])['result']);
     }
 
     public function testAcceptUsesTheConfiguredDefaultStatus(): void

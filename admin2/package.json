@@ -6,7 +6,7 @@
   "description": "Admin 2 UI (page + dashboard widget) for the Grav 2 Redirect Manager plugin. Builds two self-contained ES files into ../admin-next/.",
   "scripts": {
     "dev": "vite --config vite.dev.config.ts --open /dev/index.html",
-    "build": "npm run build:page && npm run build:widget && node scripts/check-bundles.mjs",
+    "build": "npm run i18n && npm run build:page && npm run build:widget && node scripts/check-bundles.mjs",
     "build:page": "vite build --config vite.config.ts --mode page",
     "build:widget": "vite build --config vite.config.ts --mode widget",
     "i18n": "node scripts/gen-i18n.mjs",
@@ -16,7 +16,11 @@
     "e2e": "node e2e/run.mjs",
     "e2e:bundle": "RM_BUNDLE=1 node e2e/run.mjs",
     "e2e:interact": "node e2e/interact.mjs",
-    "e2e:real": "node e2e/real-admin.mjs"
+    "e2e:real": "node e2e/real-admin.mjs",
+    "e2e:flows": "node e2e/real-flows.mjs",
+    "e2e:readonly": "node e2e/real-readonly.mjs",
+    "e2e:axe": "node e2e/real-axe.mjs",
+    "e2e:shots": "node e2e/real-shots.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

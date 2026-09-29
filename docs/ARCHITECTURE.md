@@ -21,7 +21,7 @@ classes/
   Notify/                   WebhookNotifier (HMAC), DigestBuilder. No Grav.
   Grav/                     Everything that touches Grav: RequestContextFactory, RedirectResponder (pure, returns ResponseData),
                             ServiceFactory (pure, built from config arrays), RedirectLookup, RuleEvents, TwigExtension,
-                            GravPageIndexBuilder + PageIndexCache, SchedulerJobs (job registration and entry points).
+                            GravPageIndexBuilder (page tree of every supported language) + PageIndexCache, SchedulerJobs (job registration and entry points).
   Auto/                     Automatic redirects. Grav-free: PageSnapshot/PageNode, AutoRedirectPlanner (plan = rules to
                             create, update, delete, notes, pending decision), AutoRedirectApplier (runs a plan in
                             RuleRepository::transaction, fires events, updates the state), AutoState, MoveDeriver,
@@ -58,6 +58,8 @@ All under `user://data/redirect-manager/` (per site, so Grav multisite setups ke
 
 Suggested `.gitignore` for Git Sync users: `hits/`, `404/`, `404.sqlite` (logs are not content).
 
+The directory also carries an `.htaccess` (`Require all denied`, Apache 2.2 fallback `Deny from all`) and an empty `index.html`, written by `Storage/DataDirProtection` the first time a service that writes there is used (`ServiceFactory::protectDataDir()`). Existing files are never overwritten, so a changed `.htaccess` stays. Grav's own `.htaccess` and nginx samples already deny `user/data/` except media files; this is defence in depth (nginx ignores `.htaccess`). The read-only matching path does not touch the directory.
+
 The compiled rule set lives in `cache://redirect-manager/rules-<hash>.php` (plain `return [...]` array, OPcache friendly). It stores the `rules.yaml` mtime and size; one `stat()` per request detects changes, including those pulled in by Git Sync. Clearing the Grav cache only forces a rebuild.
 
 ## Rule model
@@ -89,6 +91,7 @@ Everything below is wrapped in try/catch: a failure is logged to `grav.log` and 
    - The event `onRedirectMatched` fires (payload `result`, `context`, `request`, `cancel`); listeners may replace `result` or cancel.
    - 30x: hits are appended (one line per applied rule), `RedirectResponder` builds the response (Location with base path and language prefix, `Cache-Control` permanent or temporary, `X-Redirect-By`, empty body) and `$grav->close()` sends it. No session exists yet, so no cookie and cacheable. This also runs before Grav's trailing-slash redirect, so there is no double hop.
    - 410 / 451 / pass-through: the result is kept on the plugin and finished in step 2.
+   - With `debug_timing: true` (or the environment variable `REDIRECT_MANAGER_TIMING=1`) the handler adds `X-Redirect-Manager-Time: <microseconds>` for the time from handler entry to the end of the match (services, request context, compiled rule cache, match) on every request the plugin looked at. Off by default: the only cost then is one `getenv()` and one config read. Numbers: docs/PERFORMANCE.md.
 2. `onPagesInitialized` (priority 10): 410/451 render `redirect-manager/gone.html.twig` / `unavailable.html.twig` (a theme overrides them with its own `templates/redirect-manager/...`; plugin path is added last in `onTwigTemplatePaths`) and close with that status. The session has started by now, so `Set-Cookie`, `Expires`, `Pragma` are removed before closing. Pass-through: `unset($grav['page']); $grav['page'] = $pages->find(target)`; a target that is not a routable page logs a warning, records no hit and falls through to the normal 404.
 3. `onPageNotFound` (priority 10, above the error plugin): `NotFoundLogger::log()` (skipped for ignored paths, non-GET/HEAD, logging off, bots when `log_bots: false`), event `onNotFoundLogged` (payload `entry`), then `Matcher::match(ctx, MatchPhase::NotFound)` for "only if not found" rules with the same `onRedirectMatched` event. 30x and 410/451 are sent like in step 1/2 with the session headers stripped; pass-through sets `$event->page` and stops propagation so the error plugin does not replace it. Nothing matched: no `stopPropagation`.
 4. Hits are appended with `HitRecorder` (one line per hit); aggregation happens in the scheduler, the admin API and the CLI. Retention purges of the 404 log are not run on requests either.
@@ -110,6 +113,10 @@ Events for other plugins are fired through `Grav\RuleEvents` (`saved()`, `matche
 ## Scheduler
 
 `onSchedulerInitialized` registers three jobs (static `Class::method` callables in `Grav/SchedulerJobs`): `redirect-manager-maintenance` (hourly), `redirect-manager-check-targets` (`checker.schedule`, when `checker.enabled`) and `redirect-manager-digest` (07:00 daily or Monday, when `notifications.email_digest` is not `none`). Callable jobs run inside the scheduler process, so Grav and the plugin are loaded. Run one now: `bin/grav scheduler --run=<job id>`; list them: `bin/grav scheduler --jobs`. Jobs have no request to read the site URL from: set `base_url` in the plugin config (else `system.custom_base_url`, else `http://localhost`).
+
+## Plugin root and `config/`
+
+The root holds exactly three yaml files: `redirect-manager.yaml` (defaults), `blueprints.yaml` and `languages.yaml`. GPM names a direct-installed package after the first other `*.yaml` it finds in the ZIP root, so `permissions.yaml` and the MCP manifest live in `config/`. `onRegisterPermissions` reads `config/permissions.yaml`; `onApiMcpTools` hands `config/mcp.yaml` to the API plugin's tool collector (`Grav\McpManifest`), which yields the same tools as a root `mcp.yaml` would. Why: docs/DECISIONS.md D-024. `scripts/build-release.sh` and `tests/Unit/PluginLayoutTest.php` guard the layout.
 
 ## Integration tests
 

@@ -14,7 +14,7 @@
   import { formatNumber } from '../lib/format';
   import { locale, t } from '../lib/i18n.svelte';
   import { linkClick, router } from '../lib/router.svelte';
-  import { registerSearch, versions } from '../lib/state/app.svelte';
+  import { can, registerSearch, versions } from '../lib/state/app.svelte';
   import { MAX_ROWS, MIN_SCORE_OPTIONS, STATUSES, filterRows, formatScore, limitRows, type SuggestionStatus } from '../lib/suggestions';
 
   let searchEl: HTMLInputElement | null = $state(null);
@@ -121,12 +121,14 @@
       aria-label={t('SUGGESTIONS.MIN_LABEL')}
       onchange={(e: Event) => suggestions.setList({ min: Number((e.currentTarget as HTMLSelectElement).value) })}
     />
-    <Button class="push" variant="outline" loading={suggestions.generating} onclick={() => suggestions.generate()}>
-      <Sparkles size={14} />{t('SUGGESTIONS.GENERATE')}
-    </Button>
+    {#if can.manage}
+      <Button class="push" variant="outline" loading={suggestions.generating} onclick={() => suggestions.generate()}>
+        <Sparkles size={14} />{t('SUGGESTIONS.GENERATE')}
+      </Button>
+    {/if}
   </div>
 
-  {#if isOpen && suggestions.loaded && suggestions.rows.length > 0}
+  {#if isOpen && can.manage && suggestions.loaded && suggestions.rows.length > 0}
     <BulkPanel />
   {/if}
 
@@ -137,14 +139,14 @@
       {#if anyReviewed}
         <EmptyState icon={Sparkles} title={t('SUGGESTIONS.EMPTY_DONE_TITLE')} text={t('SUGGESTIONS.EMPTY_DONE_TEXT')}>
           {#snippet actions()}
-            <Button variant="primary" size="default" loading={suggestions.generating} onclick={() => suggestions.generate()}>{t('SUGGESTIONS.GENERATE')}</Button>
+            {#if can.manage}<Button variant="primary" size="default" loading={suggestions.generating} onclick={() => suggestions.generate()}>{t('SUGGESTIONS.GENERATE')}</Button>{/if}
             <Button variant="outline" size="default" href="#/404" onclick={linkClick}>{t('SUGGESTIONS.EMPTY_LINK')}</Button>
           {/snippet}
         </EmptyState>
       {:else}
         <EmptyState icon={Sparkles} title={t('SUGGESTIONS.EMPTY_TITLE')} text={t('SUGGESTIONS.EMPTY_TEXT')}>
           {#snippet actions()}
-            <Button variant="primary" size="default" loading={suggestions.generating} onclick={() => suggestions.generate()}>{t('SUGGESTIONS.GENERATE')}</Button>
+            {#if can.manage}<Button variant="primary" size="default" loading={suggestions.generating} onclick={() => suggestions.generate()}>{t('SUGGESTIONS.GENERATE')}</Button>{/if}
             <Button variant="outline" size="default" href="#/404" onclick={linkClick}>{t('SUGGESTIONS.EMPTY_LINK')}</Button>
           {/snippet}
         </EmptyState>
@@ -173,7 +175,7 @@
         {/snippet}
       </EmptyState>
     {:else}
-      <SuggestionsTable rows={limited.rows} actions={isOpen} />
+      <SuggestionsTable rows={limited.rows} actions={isOpen && can.manage} />
       {#if suggestions.error}
         <div class="banner bad" role="alert" style="margin:0.75rem">
           <div class="b-body">{t('SUGGESTIONS.REFRESH_FAILED')}</div>

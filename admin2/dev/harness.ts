@@ -4,12 +4,12 @@
  * fakes toast + dialogs, provides theme/language switches and the mock API.
  *
  * URL flags: ?theme=dark|light  ?lang=en|de|ar  ?rows=300|10000  ?latency=0
- *            ?fail=0.2  ?nohost=1 (no toast/dialog globals)  ?i18n=off  ?chrome=0
+ *            ?fail=0.2  ?readonly=1  ?nohost=1 (no toast/dialog globals)  ?i18n=off  ?chrome=0
  *            ?rotate=1 (rotate the API token every 5 s to prove it is re-read)
  */
 import './host.css';
-import { fallbackEn } from '../src/lib/i18n-fallback';
-import { strings_de } from '../src/i18n/de.index';
+import YAML from 'yaml';
+import languagesYaml from '../../languages.yaml?raw';
 import { installMockApi } from './mock-api';
 
 const BUNDLE_ROOT = import.meta.env.DEV ? (await import('./root')).REPO_ROOT : '';
@@ -51,8 +51,17 @@ setTheme((params.get('theme') as any) ?? (savedTheme as any) ?? 'light');
 /* ---------- i18n bridge ---------- */
 const subs = new Set<(l: string) => void>();
 let lang = params.get('lang') ?? 'en';
-const dicts: Record<string, Record<string, string>> = { en: fallbackEn, de: strings_de };
-const P = 'PLUGIN_REDIRECT_MANAGER.UI.';
+/** The plugin's real language file, flattened the way Grav does it, so the harness sees what a host would serve. */
+function flatten(node: unknown, prefix: string, out: Record<string, string> = {}): Record<string, string> {
+  if (node && typeof node === 'object') for (const [k, v] of Object.entries(node)) flatten(v, `${prefix}.${k}`, out);
+  else out[prefix] = String(node);
+  return out;
+}
+const parsed = YAML.parse(languagesYaml) as Record<string, { PLUGIN_REDIRECT_MANAGER: unknown }>;
+const dicts: Record<string, Record<string, string>> = {
+  en: flatten(parsed.en.PLUGIN_REDIRECT_MANAGER, 'PLUGIN_REDIRECT_MANAGER'),
+  de: flatten(parsed.de.PLUGIN_REDIRECT_MANAGER, 'PLUGIN_REDIRECT_MANAGER'),
+};
 const i18nOff = params.get('i18n') === 'off';
 w.__GRAV_I18N = {
   get locale() {
@@ -61,9 +70,9 @@ w.__GRAV_I18N = {
   get dir() {
     return lang === 'ar' || lang === 'he' ? 'rtl' : 'ltr';
   },
-  has: (key: string) => !i18nOff && key.startsWith(P) && !!dicts[lang]?.[key.slice(P.length)],
+  has: (key: string) => !i18nOff && !!dicts[lang]?.[key],
   // like the real host: unknown keys are humanised, params are NOT applied to raw values
-  t: (key: string) => (key.startsWith(P) && dicts[lang]?.[key.slice(P.length)]) || key.split('.').pop()!.replace(/_/g, ' ').toLowerCase(),
+  t: (key: string) => dicts[lang]?.[key] || key.split('.').pop()!.replace(/_/g, ' ').toLowerCase(),
   subscribe(fn: (l: string) => void) {
     subs.add(fn);
     return () => subs.delete(fn);
@@ -218,6 +227,7 @@ const mock = installMockApi({
   rules: rows,
   latency: latency !== null ? [Number(latency), Number(latency)] : undefined,
   failRate: Number(params.get('fail') ?? 0),
+  readOnly: params.get('readonly') === '1',
 });
 w.__RM_MOCK = mock;
 

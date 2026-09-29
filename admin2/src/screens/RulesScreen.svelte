@@ -11,10 +11,12 @@
   import BulkBar from './rules/BulkBar.svelte';
   import ColumnChooser from './rules/ColumnChooser.svelte';
   import QuickFilters from './rules/QuickFilters.svelte';
+  import AutoPanel from './rules/AutoPanel.svelte';
+  import TargetCheck from './rules/TargetCheck.svelte';
   import { t } from '../lib/i18n.svelte';
   import { router, navigate } from '../lib/router.svelte';
   import { rules } from '../lib/state/rules.svelte';
-  import { openEditor, registerSearch, versions } from '../lib/state/app.svelte';
+  import { can, openEditor, registerSearch, versions } from '../lib/state/app.svelte';
   import { activeFilterCount, hasAnyFilter } from '../lib/rules-query';
 
   let searchEl: HTMLInputElement | null = $state(null);
@@ -76,6 +78,8 @@
 </script>
 
 <div class="rm-rules">
+  <AutoPanel />
+
   <div class="toolbar">
     <div class="search">
       <Input
@@ -101,10 +105,12 @@
     </Button>
     <ColumnChooser />
     <span class="spacer"></span>
-    <Button variant={empty && !filtered ? 'outline' : 'primary'} onclick={() => openEditor({})} aria-keyshortcuts="n">
-      <Plus size={16} />
-      {t('RULES.NEW')}
-    </Button>
+    {#if can.manage}
+      <Button variant={empty && !filtered ? 'outline' : 'primary'} onclick={() => openEditor({})} aria-keyshortcuts="n">
+        <Plus size={16} />
+        {t('RULES.NEW')}
+      </Button>
+    {/if}
   </div>
 
   {#if filtersOpen}
@@ -112,6 +118,7 @@
   {/if}
 
   <QuickFilters />
+  <TargetCheck />
 
   <div class="card list-card" data-loaded={rules.loaded}>
     {#if rules.selectedCount > 0}<BulkBar />{/if}
@@ -127,8 +134,10 @@
           <span class="badge muted">301</span>
         </div>
         {#snippet actions()}
-          <Button variant="primary" size="default" onclick={() => openEditor({})}><Plus size={16} />{t('RULES.EMPTY_CTA')}</Button>
-          <Button variant="outline" size="default" href="#/import"><Upload size={15} />{t('RULES.EMPTY_IMPORT')}</Button>
+          {#if can.manage}
+            <Button variant="primary" size="default" onclick={() => openEditor({})}><Plus size={16} />{t('RULES.EMPTY_CTA')}</Button>
+            <Button variant="outline" size="default" href="#/import"><Upload size={15} />{t('RULES.EMPTY_IMPORT')}</Button>
+          {/if}
         {/snippet}
       </EmptyState>
     {:else if empty && filtered}

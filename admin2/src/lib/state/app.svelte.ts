@@ -1,6 +1,6 @@
 /** Cross-screen state: editor requests, data versions, stats, shortcuts. */
 import { api, isAbort } from '../api';
-import type { Rule, RuleInput, Stats, SuggestionCandidate } from '../types';
+import type { Permissions, Rule, RuleInput, Stats, StatsMeta, SuggestionCandidate } from '../types';
 
 /* ---------- rule editor requests ---------- */
 
@@ -42,7 +42,28 @@ export function bump(...areas: DataArea[]): void {
 
 /* ---------- stats (tab badge, widgets) ---------- */
 
-export const statsState = $state<{ data: Stats | null; error: boolean; loading: boolean }>({ data: null, error: false, loading: false });
+export const statsState = $state<{ data: Stats | null; meta: StatsMeta; error: boolean; loading: boolean }>({ data: null, meta: {}, error: false, loading: false });
+
+/**
+ * What the current user may do. Unknown (stats not loaded yet, or an older backend without
+ * `meta.permissions`) counts as allowed: the server enforces the rules either way, and the
+ * page should not flash a read-only state while it loads.
+ */
+export const can = {
+  get read(): boolean {
+    return statsState.meta.permissions?.read ?? true;
+  },
+  get manage(): boolean {
+    return statsState.meta.permissions?.manage ?? true;
+  },
+};
+
+/** Status a new rule starts with (the site's default), 301 when the backend does not say. */
+export function defaultStatus(): number {
+  return statsState.meta.default_status ?? 301;
+}
+
+export type { Permissions };
 let statsAbort: AbortController | null = null;
 
 export async function loadStats(): Promise<void> {
@@ -51,8 +72,9 @@ export async function loadStats(): Promise<void> {
   statsAbort = ctl;
   statsState.loading = true;
   try {
-    const { data } = await api.get<Stats>('/redirects/stats', undefined, ctl.signal);
+    const { data, meta } = await api.get<Stats>('/redirects/stats', undefined, ctl.signal);
     statsState.data = data;
+    statsState.meta = (meta ?? {}) as StatsMeta;
     statsState.error = false;
   } catch (e) {
     if (isAbort(e)) return;

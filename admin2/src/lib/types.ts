@@ -49,6 +49,8 @@ export interface RuleStats {
 
 export interface Issue {
   code: string;
+  /** form field the finding belongs to (source, target, ...) */
+  field?: string;
   severity: Severity;
   message: string;
   params?: Record<string, unknown>;
@@ -190,12 +192,26 @@ export interface MatchResult {
   trace: TraceStep[];
 }
 
+/** Where the tester's walk ended. Flags are present only when they apply. */
+export interface FinalInfo {
+  url: string;
+  status: number;
+  /** the target is on another site and was not requested (status is reported as 200) */
+  external?: boolean;
+  loop?: boolean;
+  /** the walk stopped at the depth limit */
+  truncated?: boolean;
+  /** the path is excluded from redirects (excluded_paths, API and admin routes) */
+  excluded?: boolean;
+}
+
 export interface TestResponse {
   input: { url: string; [k: string]: unknown };
   context: Record<string, unknown>;
   result: MatchResult | null;
-  chain: { url: string; status: number; rule_id: string | null }[];
-  final: { url: string; status: number };
+  /** one entry per rule hop; a last entry with rule_id null is the page the visitor ends up on (200) or a 404 */
+  chain: { url: string; status: number; rule_id: string | null; location?: string | null }[];
+  final: FinalInfo;
   trace: TraceStep[];
   page_exists: boolean;
 }
@@ -359,7 +375,11 @@ export interface ExportResult {
   filename: string;
   mime: string;
   content: string;
+  /** rules the format cannot express at all: {rule_id, code, reason} */
   skipped: unknown[];
+  /** rules exported with a loss of detail */
+  lossy?: unknown[];
+  exported?: number;
 }
 
 export interface SiteConfig {
@@ -367,6 +387,28 @@ export interface SiteConfig {
   routes: Record<string, string>;
   /** system.pages.redirect_default_route etc. */
   settings?: Record<string, unknown>;
+}
+
+/* Live check of the redirect targets */
+
+export interface CheckResult {
+  rule_id: string;
+  source?: string;
+  target?: string;
+  url: string;
+  status: number;
+  ok: boolean;
+  error: string | null;
+  final_url: string | null;
+  redirects: number;
+  duration_ms: number;
+  checked_at: string;
+}
+
+/** GET /redirects/checks; POST /redirects/checks/run adds `checked` and `dead` */
+export interface CheckRun {
+  last_run: string | null;
+  results: CheckResult[];
 }
 
 /* Stats */
@@ -386,9 +428,54 @@ export interface Stats {
   pending_deletes: number;
 }
 
+/** GET /redirects/pending: a deleted page waiting for a decision (delete policy "ask"). */
 export interface PendingDelete {
   id: string;
+  title: string;
   route: string;
-  title?: string;
+  /** route per language; "*" is the route of a page without language variants */
+  routes: Record<string, string>;
+  languages: string[];
+  /** routes of the child pages, at most 50 */
+  children: string[];
+  children_count: number;
   deleted_at: string;
+  /** nearest ancestor route that still exists, null when there is none */
+  suggested_parent: string | null;
+}
+
+export type PendingAction = 'gone' | 'parent' | 'redirect' | 'dismiss';
+
+export interface PendingResolveResult {
+  id: string;
+  action: PendingAction;
+  created: Rule[];
+  updated: Rule[];
+  deleted: string[];
+  notes: { kind: string; source: string; message: string }[];
+}
+
+/** GET /redirects/badge. `count` is null when there is nothing to show. */
+export interface BadgeInfo {
+  count: number | null;
+  unseen: number;
+  pending: number;
+}
+
+export interface Permissions {
+  read: boolean;
+  manage: boolean;
+}
+
+/** meta of GET /redirects/stats */
+export interface StatsMeta extends ApiMeta {
+  permissions?: Permissions;
+  /** status code a new rule gets when none is sent */
+  default_status?: number;
+}
+
+export interface SuggestionsMeta extends ApiMeta {
+  counts?: { open: number; accepted: number; rejected: number };
+  /** score the bulk accept slider starts at (suggestions.bulk_accept_score) */
+  bulk_accept_score?: number;
 }

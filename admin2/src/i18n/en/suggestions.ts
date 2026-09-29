@@ -6,7 +6,7 @@ const en: Record<string, string> = {
   'SUGGESTIONS.STATUS_REJECTED': 'Rejected',
   'SUGGESTIONS.STATUS_ITEM': '{label} ({n})',
   'SUGGESTIONS.GENERATE': 'Generate suggestions',
-  'SUGGESTIONS.GENERATED': '{created, plural, one {# new suggestion} other {# new suggestions}}, {updated} updated, {total} open.',
+  'SUGGESTIONS.GENERATED': '{created, plural, one {# new suggestion} other {# new suggestions}}, {improved} improved, {none} without a match.',
   'SUGGESTIONS.SEARCH_LABEL': 'Filter suggestions by path',
   'SUGGESTIONS.SEARCH_PLACEHOLDER': 'Filter by path',
   'SUGGESTIONS.MIN_LABEL': 'Minimum score',
@@ -25,6 +25,7 @@ const en: Record<string, string> = {
   'SUGGESTIONS.BULK_MORE': '+{n} more not shown',
   'SUGGESTIONS.BULK_CONFIRM': 'Create {n, plural, one {# redirect} other {# redirects}}',
   'SUGGESTIONS.BULK_DONE': '{n, plural, one {# redirect created} other {# redirects created}}.',
+  'SUGGESTIONS.BULK_SKIPPED': '{n, plural, one {# suggestion was skipped because its rule did not pass validation} other {# suggestions were skipped because their rules did not pass validation}}.',
 
   'SUGGESTIONS.TABLE_LABEL': 'Redirect suggestions',
   'SUGGESTIONS.COL_SCORE': 'Score',

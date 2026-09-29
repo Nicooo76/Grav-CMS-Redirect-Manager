@@ -6,6 +6,7 @@ import suggestions from './de/suggestions';
 import tester from './de/tester';
 import importexport from './de/importexport';
 import settings from './de/settings';
+import auto from './de/auto';
 import widget from './de/widget';
 
 export const strings_de: Record<string, string> = {
@@ -18,4 +19,5 @@ export const strings_de: Record<string, string> = {
   ...importexport,
   ...settings,
   ...widget,
+  ...auto,
 };

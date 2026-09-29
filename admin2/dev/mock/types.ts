@@ -16,6 +16,10 @@ export interface MockOptions {
   seed?: number;
   /** 0..1 probability of a random HTTP 500 (default 0) */
   failRate?: number;
+  /** simulate a user with api.redirects.read only: writes answer 403, stats report manage=false */
+  readOnly?: boolean;
+  /** status a new rule gets (Grav redirect_default_code); default 302 like stock Grav */
+  defaultStatus?: number;
 }
 export type ResolvedOptions = Required<MockOptions>;
 
@@ -50,6 +54,8 @@ export interface MockState {
   suggestions: StoredSuggestion[];
   pages: PageHit[];
   pending: PendingDelete[];
+  /** ids of automatic rules nobody has looked at (sidebar badge) */
+  unseen: string[];
   checks: { last_run: string | null; results: CheckResult[] };
   /** rule id -> status of the last live check (0 = timeout); drives the `dead_target` badge */
   dead: Map<string, number>;

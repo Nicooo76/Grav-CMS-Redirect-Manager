@@ -387,10 +387,11 @@ export function buildState(opts: ResolvedOptions): MockState {
     opts, rules, notFound, pages, dead,
     suggestions: buildSuggestions(r, now, notFound, pages),
     pending: [
-      { id: 'pd1', route: '/blog/alter-artikel-2022', title: 'Alter Artikel (2022)', deleted_at: isoAtom(now - 2 * DAY) },
-      { id: 'pd2', route: '/leistungen/printdesign', title: 'Printdesign', deleted_at: isoAtom(now - 5 * DAY) },
-      { id: 'pd3', route: '/shop/moebel/eckbank-eiche', title: 'Eckbank Eiche', deleted_at: isoAtom(now - 9 * DAY) },
+      { id: 'd1a0ed959231866287', title: 'Alter Artikel (2022)', route: '/blog/alter-artikel-2022', routes: { '*': '/blog/alter-artikel-2022' }, languages: [], children: [], children_count: 0, deleted_at: isoAtom(now - 2 * DAY), suggested_parent: '/blog' },
+      { id: 'd1a0ed95923186628a', title: 'Printdesign', route: '/leistungen/printdesign', routes: { '*': '/leistungen/printdesign' }, languages: [], children: ['/leistungen/printdesign/flyer', '/leistungen/printdesign/plakate', '/leistungen/printdesign/visitenkarten'], children_count: 3, deleted_at: isoAtom(now - 5 * DAY), suggested_parent: '/leistungen' },
+      { id: 'd1a0ed95923186628d', title: 'Eckbank Eiche', route: '/shop/moebel/eckbank-eiche', routes: { '*': '/shop/moebel/eckbank-eiche' }, languages: [], children: [], children_count: 0, deleted_at: isoAtom(now - 9 * DAY), suggested_parent: '/shop/moebel' },
     ],
+    unseen: rules.filter((x) => x.origin === 'auto').slice(0, 3).map((x) => x.id),
     checks: { last_run: isoAtom(now - 3 * 3600_000), results: [] },
     ignorePatterns: ['/wp-content/plugins/*', '*.map'],
     siteConfig: {

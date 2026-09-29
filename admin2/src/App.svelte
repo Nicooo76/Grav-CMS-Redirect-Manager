@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { TriangleAlert } from 'lucide-svelte';
+  import { TriangleAlert, Eye } from 'lucide-svelte';
   import Tabs from './lib/ui/Tabs.svelte';
   import ToastHost from './lib/ui/ToastHost.svelte';
   import DialogHost from './lib/ui/DialogHost.svelte';
@@ -14,7 +14,7 @@
   import { t, dir } from './lib/i18n.svelte';
   import { router, navigate, hrefFor } from './lib/router.svelte';
   import { tabOf, type TabId } from './lib/router';
-  import { editor, openEditor, closeEditor, loadStats, statsState, versions, focusSearch } from './lib/state/app.svelte';
+  import { can, editor, openEditor, closeEditor, loadStats, statsState, versions, focusSearch } from './lib/state/app.svelte';
   import { isTypingTarget } from './lib/dom';
   import { rules } from './lib/state/rules.svelte';
 
@@ -50,7 +50,9 @@
 
   /* editor <-> route sync: #/rules/new and #/rules/<id> open the slide-over */
   $effect(() => {
-    if (route.name === 'rule-new') {
+    if (route.name === 'rule-new' && !can.manage) {
+      navigate({ name: 'rules' }, { replace: true });
+    } else if (route.name === 'rule-new') {
       const q = route.query;
       openEditor({
         origin: 'route',
@@ -91,6 +93,7 @@
       if (e.metaKey || e.ctrlKey) return;
       if (editor.open) return;
       if (e.key === 'n') {
+        if (!can.manage) return;
         e.preventDefault();
         openEditor({});
       } else if (e.key === '/') {
@@ -101,7 +104,9 @@
 
     const onAction = (e: Event) => {
       const id = (e as CustomEvent).detail?.id;
-      if (id === 'new' || id === 'create' || id === 'add') openEditor({});
+      if (id === 'new' || id === 'create' || id === 'add') {
+        if (can.manage) openEditor({});
+      }
       else if (id === 'import') navigate({ name: 'import' });
       else if (id === 'export') navigate({ name: 'export' });
       else if (id === 'test' || id === 'tester') navigate({ name: 'tester' });
@@ -133,6 +138,9 @@
 <div class="rm-root" dir={dir()}>
   <div data-rm-main>
     <Tabs {tabs} active={tab} label={t('APP.NAV')} onselect={selectTab} />
+    {#if !can.manage}
+      <div class="banner rm-ro" role="note" data-testid="read-only-note"><Eye size={16} aria-hidden="true" /><div class="b-body">{t('PERM.READ_ONLY')}</div></div>
+    {/if}
     <div class="rm-view">
       <svelte:boundary>
         {#if tab === 'rules'}
@@ -169,6 +177,9 @@
 <style>
   .rm-root {
     min-inline-size: 0;
+  }
+  .rm-ro {
+    margin-block-start: 0.75rem;
   }
   .rm-view {
     padding-block-start: 1rem;

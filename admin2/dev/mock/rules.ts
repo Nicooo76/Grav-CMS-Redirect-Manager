@@ -66,24 +66,24 @@ export function validateFields(r: Rule): FieldIssue[] {
   const err = (field: string, code: string, message: string, params?: Record<string, unknown>, severity: FieldIssue['severity'] = 'error') =>
     out.push({ field, code, message, severity, ...(params ? { params } : {}) });
 
-  if (!MATCH_TYPES.includes(r.match_type)) err('match_type', 'invalid_match_type', `Unbekannter Match-Typ "${String(r.match_type)}".`);
-  if (!STATUS_CODES.includes(r.status)) err('status', 'invalid_status', `Status ${String(r.status)} ist nicht erlaubt (200, 301, 302, 307, 308, 410, 451).`);
-  if (!QUERY_MODES.includes(r.query_mode)) err('query_mode', 'invalid_query_mode', `Unbekannter Query-Modus "${String(r.query_mode)}".`);
-  if (!TARGET_TYPES.includes(r.target_type)) err('target_type', 'invalid_target_type', `Unbekannter Zieltyp "${String(r.target_type)}".`);
-  if (!r.source) err('source', 'source_empty', 'Die Quelle darf nicht leer sein.');
+  if (!MATCH_TYPES.includes(r.match_type)) err('match_type', 'invalid_value', `"match_type" must be one of ${MATCH_TYPES.join(', ')}.`);
+  if (!STATUS_CODES.includes(r.status)) err('status', 'invalid_value', `"status" must be one of ${STATUS_CODES.join(', ')}.`);
+  if (!QUERY_MODES.includes(r.query_mode)) err('query_mode', 'invalid_value', `"query_mode" must be one of ${QUERY_MODES.join(', ')}.`);
+  if (!TARGET_TYPES.includes(r.target_type)) err('target_type', 'invalid_value', `"target_type" must be one of ${TARGET_TYPES.join(', ')}.`);
+  if (!r.source) err('source', 'source_empty', 'The source is empty.');
   else if (MATCH_TYPES.includes(r.match_type)) {
     const re = regexError(r);
-    if (re) err('source', r.match_type === 'regex' ? 'invalid_regex' : 'invalid_pattern', `Ungültiger Ausdruck: ${re}`);
+    if (re) err('source', 'regex_invalid', 'The regular expression is invalid.');
   }
   if (r.active_from && r.expires_at && Date.parse(r.active_from) >= Date.parse(r.expires_at)) {
-    err('expires_at', 'invalid_period', 'Das Ablaufdatum liegt vor dem Startdatum.');
+    err('expires_at', 'dates_inverted', 'The rule expires before or when it becomes active.');
   }
 
   const needsTarget = STATUS_CODES.includes(r.status) && r.status !== 410 && r.status !== 451;
   if (!r.target) {
-    if (needsTarget) err('target', 'target_empty', 'Ein Ziel ist erforderlich.');
+    if (needsTarget) err('target', 'target_required', 'A target is required for this status.', { status: r.status });
   } else if (/[\u0000-\u001f]/.test(r.target)) {
-    err('target', 'unsafe_target', 'Das Ziel enthält Steuerzeichen.');
+    err('target', 'target_invalid', 'The target is not valid.');
   } else if (r.target_type === 'url') {
     let u: URL | null = null;
     try {
@@ -91,19 +91,19 @@ export function validateFields(r: Rule): FieldIssue[] {
     } catch {
       /* handled below */
     }
-    if (!u || !/^https?:$/.test(u.protocol)) err('target', 'unsafe_target', 'Externe Ziele müssen mit http:// oder https:// beginnen.');
-    else if (!hostAllowed(u.hostname)) err('target', 'unsafe_target', `Host ${u.hostname} steht nicht in der Liste erlaubter Hosts.`, { host: u.hostname });
-    if (r.status === 200) err('status', 'passthrough_external', 'Status 200 (Durchreichen) geht nur mit einem internen Ziel.');
+    if (!u || !/^https?:$/.test(u.protocol)) err('target', 'target_scheme', 'The target uses a scheme that is not allowed (only http and https).');
+    else if (!hostAllowed(u.hostname)) err('target', 'target_host_not_allowed', 'The target host is not in the list of allowed external hosts.', { target: r.target });
+    if (r.status === 200) err('target', 'passthrough_external', 'A pass-through rule serves a page of this site; it cannot point to an external URL.');
   } else if (r.target.startsWith('//')) {
-    err('target', 'unsafe_target', 'Protokollrelative Ziele (//host) sind nicht erlaubt.');
+    err('target', 'target_protocol_relative', 'A target starting with // or /\\ would redirect to another site.');
   } else if (!r.target.startsWith('/')) {
-    err('target', 'target_invalid', 'Interne Ziele müssen mit / beginnen.');
+    err('target', 'target_invalid', 'The target is not valid.');
   }
 
   if (r.target && MATCH_TYPES.includes(r.match_type)) {
     const n = captureCount(r);
     const max = Math.max(0, ...[...r.target.matchAll(/\$\{?(\d+)\}?/g)].map((m) => Number(m[1])));
-    if (max > n) err('target', 'unknown_capture', `Das Ziel verwendet $${max}, die Quelle liefert nur ${n} Treffergruppe(n).`, { max, available: n }, 'warning');
+    if (max > n) err('target', 'target_placeholder_unknown', `The placeholder $${max} does not refer to a capture of the source (${n} available).`, { placeholder: `$${max}`, groups: n, names: [] }, 'warning');
   }
   return out;
 }

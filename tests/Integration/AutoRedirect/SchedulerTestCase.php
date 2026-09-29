@@ -49,7 +49,7 @@ abstract class SchedulerTestCase extends IntegrationTestCase
     {
         $site = $this->site();
         $process = proc_open(
-            array_merge([TestSite::phpBinary(), 'bin/grav'], $args),
+            TestSite::phpCommand('bin/grav', ...$args),
             [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $site->dir,

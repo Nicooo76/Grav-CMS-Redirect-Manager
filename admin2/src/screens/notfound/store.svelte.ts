@@ -231,8 +231,8 @@ class NotFoundStore {
     if (!pattern) return;
     const { restore, removed } = this.#removeWhere((r) => globMatch(pattern, r.path));
     try {
-      const { data } = await api.post<{ removed?: number }>('/redirects/404/ignore', { pattern, purge: true });
-      toast.success(t('NOTFOUND.IGNORED', { pattern, n: typeof data?.removed === 'number' ? data.removed : removed }));
+      const { data } = await api.post<{ pattern: string; patterns: string[]; purged: number }>('/redirects/404/ignore', { pattern, purge: true });
+      toast.success(t('NOTFOUND.IGNORED', { pattern, n: typeof data?.purged === 'number' ? data.purged : removed }));
     } catch (e) {
       restore();
       toast.error(describeError(e));
@@ -303,7 +303,7 @@ class NotFoundStore {
     if (candidates.length === 0 && row.best_suggestion) candidates = [row.best_suggestion];
     const target = row.best_suggestion?.target ?? candidates[0]?.target;
     openEditor({
-      prefill: { source: row.path, match_type: 'exact', status: 301, ...(target ? { target } : {}) },
+      prefill: { source: row.path, match_type: 'exact', ...(target ? { target } : {}) },
       candidates,
       onsaved: () => {
         toast.success(t('NOTFOUND.CREATED', { path: row.path }));

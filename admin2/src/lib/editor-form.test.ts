@@ -78,8 +78,8 @@ describe('editor form', () => {
   });
 
   it('maps server issues to fields and finds blockers', () => {
-    expect(issueField({ code: 'invalid_regex', severity: 'error', message: '' })).toBe('source');
-    expect(issueField({ code: 'unsafe_target', severity: 'error', message: '' })).toBe('target');
+    expect(issueField({ code: 'regex_invalid', severity: 'error', message: '' })).toBe('source');
+    expect(issueField({ code: 'target_scheme', severity: 'error', message: '' })).toBe('target');
     expect(issueField({ code: 'x', field: 'status', severity: 'error', message: '' } as never)).toBe('status');
     expect(issueField({ code: 'chain', severity: 'warning', message: '' })).toBe('general');
     expect(hasBlockingIssue([{ code: 'chain', severity: 'warning', message: '' }])).toBe(false);

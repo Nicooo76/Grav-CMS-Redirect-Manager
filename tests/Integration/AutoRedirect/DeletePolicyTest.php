@@ -234,7 +234,9 @@ final class DeletePolicyTest extends AutoRedirectTestCase
         self::assertSame(200, $response->status, $response->describe());
         self::assertSame([], $this->pendingIds());
         self::assertSame([], $this->autoRules());
-        self::assertSame(0, $this->api->get('/redirects/badge')->data()['count'] ?? null);
+        $badge = $this->api->get('/redirects/badge')->data();
+        self::assertArrayHasKey('count', $badge);
+        self::assertNull($badge['count'], 'nothing to show: null, not 0');
     }
 
     public function testResolveValidation(): void
@@ -281,7 +283,13 @@ final class DeletePolicyTest extends AutoRedirectTestCase
 
         $seen = $this->api->post('/redirects/badge/seen', []);
         self::assertSame(200, $seen->status, $seen->describe());
-        self::assertSame(0, $this->api->get('/redirects/badge')->data()['count']);
+        self::assertArrayHasKey('count', $seen->data());
+        self::assertNull($seen->data()['count'], 'the sidebar hides the pill on null');
+        $after = $this->api->get('/redirects/badge')->data();
+        self::assertArrayHasKey('count', $after);
+        self::assertNull($after['count']);
+        self::assertSame(0, $after['unseen']);
+        self::assertSame(0, $after['pending']);
     }
 
     public function testBadgeAddsPendingDecisionsAndIgnoresDeletedRules(): void

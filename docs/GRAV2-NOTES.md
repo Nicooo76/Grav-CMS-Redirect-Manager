@@ -38,12 +38,16 @@ Only the moved root is reported; descendants are derived from the captured subtr
 - Register routes in `onApiRegisterRoutes` (`$event['routes']->get|post|patch|delete(path, [Controller::class, 'method'])`), relative to `/api/v1`. Controllers extend `Grav\Plugin\Api\Controllers\AbstractApiController` and use `requirePermission()`, `ApiResponse::create|paginated|created|noContent` and the typed exceptions (RFC 7807 errors).
 - The FastRoute table is cached and only rebuilt when a plugin's `blueprints.yaml` mtime changes; every route change ships with a version bump.
 - Auth is handled by the API plugin (API key, JWT via `X-API-Token` or Bearer, session cookie). There is no CSRF nonce: cookie-only writes must pass the API plugin's `SameOriginGuard`. The plugin adds nothing on top except its own permission checks.
-- Permissions are registered through the class event `Grav\Events\PermissionsRegisterEvent` with a `permissions.yaml`. The API resolves and lists only `api.*` permissions, so the plugin uses **`api.redirects.read`** and **`api.redirects.manage`** (see DECISIONS.md, D-003).
+- Permissions are registered through the class event `Grav\Events\PermissionsRegisterEvent` with a permissions file (`config/permissions.yaml` here, read with `PermissionsReader::fromYaml()`; not in the root, see "GPM package name" below). The API resolves and lists only `api.*` permissions, so the plugin uses **`api.redirects.read`** and **`api.redirects.manage`** (see DECISIONS.md, D-003).
 - No OpenAPI contribution hook exists; the plugin ships `docs/openapi.yaml`.
 
 ### MCP
 
-- grav-mcp is a Node app that talks to the API. Plugins contribute tools declaratively with **`mcp.yaml`** in the plugin root (prefix + tools mapped to API routes, JSON-schema subset, permission per tool). grav-mcp loads them at startup. Multipart uploads are not supported, so imports go through a JSON body.
+- grav-mcp is a Node app that talks to the API. Plugins contribute tools declaratively with a manifest (prefix + tools mapped to API routes, JSON-schema subset, permission per tool). The API plugin only looks for **`mcp.yaml` in the plugin root**, but that file name breaks `bin/gpm direct-install` (below), so this plugin keeps the manifest in `config/mcp.yaml` and feeds the same definitions to `$event['tools']->registerPlugin()/add()` in `onApiMcpTools` (`classes/Grav/McpManifest.php`, D-024). The collector validates both routes the same way. Caveat: the `ETag`/fingerprint of `GET /mcp/tools` ignores runtime-added tools. grav-mcp loads the tools at startup. Multipart uploads are not supported, so imports go through a JSON body.
+
+### GPM package name (`bin/gpm direct-install`)
+
+- `GPM::getPackageName()` (`system/src/Grav/Common/GPM/GPM.php:816-831`, Grav 2.2.2) returns the first `*.yaml` in the package root in alphabetical order, ignoring only `blueprints.yaml` and `languages.yaml`. Every other root yaml counts, so `mcp.yaml` and `permissions.yaml` (both sort before `redirect-manager.yaml`) made GPM install this plugin as `user/plugins/mcp`. Rule: the root holds `blueprints.yaml`, `languages.yaml` and the plugin's own `<slug>.yaml` and nothing else; other yaml files go into a subfolder. The folder name comes separately from the first ZIP entry. Enforced by `scripts/build-release.sh` and `tests/Unit/PluginLayoutTest.php`.
 
 ### Scheduler and CLI
 
@@ -557,7 +561,7 @@ From `grav-plugin-api/README.md:944-1052` and `grav-skills/skills/grav-plugin-re
 ### 7. MCP
 
 - The official server is `getgrav/grav-mcp` (npm `grav-mcp`), a standalone Node.js app, **not** a Grav plugin. It calls the API plugin over HTTP with an API key (`grav-mcp/README.md:1-60`; docs https://learn.getgrav.org/2/advanced/mcp-server).
-- **Plugins can add MCP tools without writing MCP code**, via a manifest `mcp.yaml` in the plugin root next to `blueprints.yaml`/`permissions.yaml`, or in PHP via the `onApiMcpTools` event. Contract: `grav-mcp/docs/plugin-tools-spec.md`; user docs `grav-plugin-api/README.md:1054-1213`; implementation `grav-plugin-api/classes/Api/Mcp/McpManifestLoader.php` (reads `plugins://{slug}/mcp.yaml`, line 150-158) and `McpToolCollector.php`; endpoint `GET /mcp/tools` (permission `api.access`; `grav-mcp/src/tools/plugin-tools.ts:96-97`).
+- **Plugins can add MCP tools without writing MCP code**, via a manifest `mcp.yaml` in the plugin root next to `blueprints.yaml`/`permissions.yaml` (do not: it breaks `bin/gpm direct-install`, see section 1 "GPM package name"), or in PHP via the `onApiMcpTools` event, which this plugin uses to register its `config/mcp.yaml`. Contract: `grav-mcp/docs/plugin-tools-spec.md`; user docs `grav-plugin-api/README.md:1054-1213`; implementation `grav-plugin-api/classes/Api/Mcp/McpManifestLoader.php` (reads `plugins://{slug}/mcp.yaml`, line 150-158) and `McpToolCollector.php`; endpoint `GET /mcp/tools` (permission `api.access`; `grav-mcp/src/tools/plugin-tools.ts:96-97`).
 - Manifest fields: `version` (1 or 2), optional `prefix` (default slug with `-` -> `_`; tool name `{prefix}_{name}`, regex `^[a-z][a-z0-9_]*$`, max 64 chars), `tools[]: name, title, description, method, path, permission, annotations{readOnly,destructive,idempotent}, input (JSON Schema subset), query, body (v2)`. Path placeholders must be plain `{id}` (no FastRoute regex like `{id:\d+}`).
 - Minimal example for this project:
 ```yaml

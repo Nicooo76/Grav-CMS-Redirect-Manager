@@ -18,7 +18,9 @@
         }
     ],
     "require": {
-        "php": ">=8.3"
+        "php": ">=8.3",
+        "ext-json": "*",
+        "ext-mbstring": "*"
     },
     "require-dev": {
         "phpunit/phpunit": "^11.5",
@@ -39,14 +41,18 @@
     "autoload-dev": {
         "psr-4": {
             "Grav\\Plugin\\RedirectManager\\Tests\\": "tests/"
-        }
+        },
+        "exclude-from-classmap": [
+            "tests/Unit/Support/Grav/"
+        ]
     },
     "config": {
         "platform": {
             "php": "8.3.0"
         },
         "sort-packages": true,
-        "optimize-autoloader": true
+        "optimize-autoloader": true,
+        "process-timeout": 0
     },
     "scripts": {
         "cs": "php-cs-fixer fix --dry-run --diff",
@@ -54,11 +60,26 @@
         "stan": "phpstan analyse --memory-limit=1G",
         "unit": "phpunit --testsuite unit",
         "integration": "phpunit --testsuite integration",
-        "coverage": "php -d pcov.enabled=1 vendor/bin/phpunit --testsuite unit --coverage-text --coverage-clover=build/clover.xml",
+        "coverage": [
+            "@putenv XDEBUG_MODE=off",
+            "php -d pcov.enabled=1 -d pcov.directory=classes vendor/bin/phpunit --testsuite unit --coverage-text=build/coverage.txt --coverage-clover=build/clover.xml --colors=never",
+            "php scripts/coverage-report.php --min=90 build/clover.xml"
+        ],
         "test": [
             "@cs",
             "@stan",
             "@unit"
+        ],
+        "test:all": [
+            "@cs",
+            "@stan",
+            "@unit",
+            "@integration"
         ]
+    },
+    "scripts-descriptions": {
+        "coverage": "Unit-suite line coverage of classes/ (needs pcov); fails below 90 %",
+        "test": "Code style, PHPStan and the unit suite",
+        "test:all": "test plus the integration suite (needs scripts/setup-test-site.sh)"
     }
 }

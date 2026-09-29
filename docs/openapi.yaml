@@ -782,9 +782,20 @@ paths:
                     items: {$ref: '#/components/schemas/StoredSuggestion'}
                   meta:
                     type: object
-                    required: [total]
+                    required: [total, counts, bulk_accept_score]
                     properties:
-                      total: {type: integer, minimum: 0}
+                      total: {type: integer, minimum: 0, description: Number of returned rows.}
+                      bulk_accept_score: {type: number, minimum: 0, maximum: 1, description: 'Score bulk accept uses when `min_score` is omitted (`suggestions.bulk_accept_score`).'}
+                      counts:
+                        type: object
+                        description: |
+                          Stored suggestions per status among those that match `min_score` and `source`. The `status`
+                          filter is ignored, so tabs for the three states keep stable numbers.
+                        required: [open, accepted, rejected]
+                        properties:
+                          open: {type: integer, minimum: 0}
+                          accepted: {type: integer, minimum: 0}
+                          rejected: {type: integer, minimum: 0}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '422': {$ref: '#/components/responses/ValidationError'}
@@ -1052,6 +1063,12 @@ paths:
           in: query
           description: Host to put in front of relative paths where a format needs absolute URLs.
           schema: {type: string}
+        - name: ids
+          in: query
+          description: |
+            Only these rules, comma separated rule ids. Unknown ids are ignored. A blank value is no filter; any other
+            value that matches no rule exports nothing. Combines with the other filters (AND).
+          schema: {type: string}
       responses:
         '200':
           description: The export.
@@ -1118,14 +1135,35 @@ paths:
       tags: [Checks and stats]
       operationId: getStats
       summary: Dashboard numbers
-      description: Counts for the dashboard widget. Days are UTC days; 404 numbers exclude bots. Needs `api.redirects.read`.
+      description: |
+        Counts for the dashboard widget. Days are UTC days; 404 numbers exclude bots. `meta.permissions` tells what
+        the caller may do, so a client can hide write actions. Needs `api.redirects.read`.
       x-permission: api.redirects.read
       responses:
         '200':
           description: The numbers.
           content:
             application/json:
-              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Stats'}}}
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: {$ref: '#/components/schemas/Stats'}
+                  meta:
+                    type: object
+                    required: [permissions, default_status]
+                    properties:
+                      default_status:
+                        type: integer
+                        description: |
+                          Status code a new rule gets when `status` is omitted: `redirects.default_status` if above 0,
+                          else Grav's `system.pages.redirect_default_code`, else 301.
+                      permissions:
+                        type: object
+                        required: [read, manage]
+                        properties:
+                          read: {type: boolean, description: 'Holds `api.redirects.read` (always true on this route).'}
+                          manage: {type: boolean, description: 'Holds `api.redirects.manage`.'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
 
@@ -1284,7 +1322,8 @@ paths:
       operationId: getBadge
       summary: Sidebar badge count
       description: |
-        Number of auto rules the editor has not seen yet plus the pending decisions. Needs `api.redirects.read`.
+        Number of auto rules the editor has not seen yet plus the pending decisions. `count` is `null` (not 0) when
+        there is nothing to show, so the Admin 2 sidebar hides the pill. Needs `api.redirects.read`.
       x-permission: api.redirects.read
       responses:
         '200':
@@ -1317,7 +1356,7 @@ paths:
                     type: object
                     required: [count]
                     properties:
-                      count: {type: integer, minimum: 0}
+                      count: {type: [integer, 'null'], minimum: 0, description: 'Null when nothing is left to show.'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
 
@@ -2607,7 +2646,7 @@ components:
       type: object
       required: [count, unseen, pending]
       properties:
-        count: {type: integer, minimum: 0, description: '`unseen` plus `pending`.'}
+        count: {type: [integer, 'null'], minimum: 0, description: '`unseen` plus `pending`; null when that is 0.'}
         unseen: {type: integer, minimum: 0, description: 'Auto rules the editor has not seen.'}
 
         pending: {type: integer, minimum: 0, description: 'Pending decisions.'}

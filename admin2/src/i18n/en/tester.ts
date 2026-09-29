@@ -78,7 +78,7 @@ const en: Record<string, string> = {
   'TESTER.REASON_DISABLED': 'The rule is switched off.',
   'TESTER.REASON_EXPIRED': 'The rule has expired.',
   'TESTER.REASON_SCHEDULED': 'The rule starts later.',
-  'TESTER.REASON_PHASE': 'The rule applies only when no page exists, or only when one does. This is the other case.',
+  'TESTER.REASON_PHASE': 'This rule runs in another phase. Rules set to "Only if the page does not exist" wait until no page matches. All other rules run before the page lookup.',
   'TESTER.REASON_QUERY': 'The query string does not fit the rule.',
   'TESTER.REASON_HOST': 'The host is not one of the rule’s hosts.',
   'TESTER.REASON_LANGUAGE': 'The language is not one of the rule’s languages.',
@@ -86,5 +86,9 @@ const en: Record<string, string> = {
   'TESTER.REASON_CONDITION': 'A header or cookie condition is not met.',
   'TESTER.REASON_REGEX_ERROR': 'The pattern is invalid, so the rule is skipped.',
   'TESTER.REASON_UNSAFE_TARGET': 'The target was rejected as unsafe. Check the allowed hosts in the settings.',
+  'TESTER.HEAD_EXCLUDED': 'Excluded from redirects',
+  'TESTER.NOTE_EXCLUDED': 'The plugin never redirects or logs this path. It belongs to Grav, the API or the admin, or it is listed under Excluded paths in the settings.',
+  'TESTER.NOTE_EXTERNAL': 'The target is on another site. The tester does not request it, so its answer is unknown.',
+  'TESTER.STEP_EXTERNAL': 'External, not requested',
 };
 export default en;

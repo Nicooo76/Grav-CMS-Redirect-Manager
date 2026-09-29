@@ -1,0 +1,77 @@
+name: release
+
+# Push a tag vX.Y.Z (see docs/RELEASING.md). The tag must match `version:` in blueprints.yaml.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  GRAV_VERSION: "2.2.2"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches blueprints.yaml
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          blueprint="$(sed -n 's/^version:[[:space:]]*//p' blueprints.yaml | head -n 1 | tr -d "\"' \t")"
+          if [ "$version" != "$blueprint" ]; then
+            echo "Tag $tag says $version, blueprints.yaml says $blueprint." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;; *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;; esac
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          # Text between "## <version>" and the next "## " heading (awk, see scripts/changelog-section.sh).
+          scripts/changelog-section.sh "${{ steps.version.outputs.version }}" > release-notes.md
+          cat release-notes.md
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, intl, pdo_sqlite, sqlite3, curl, zip, gd, opcache, dom, simplexml, fileinfo
+          ini-values: opcache.enable_cli=1, opcache.jit=off, memory_limit=1G
+          coverage: none
+          tools: composer:v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin2/package-lock.json
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Build the ZIP
+        run: scripts/build-release.sh "${{ steps.version.outputs.version }}"
+
+      - name: Test the ZIP (manual install)
+        run: scripts/test-release.sh --manual
+
+      # See docs/RELEASING.md: bin/gpm direct-install installs this ZIP under the wrong folder name.
+      - name: Test the ZIP (bin/gpm direct-install)
+        continue-on-error: true
+        run: scripts/test-release.sh
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.version.outputs.version }}
+          body_path: release-notes.md
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          files: |
+            dist/grav-plugin-redirect-manager-${{ steps.version.outputs.version }}.zip
+            dist/grav-plugin-redirect-manager-${{ steps.version.outputs.version }}.zip.sha256

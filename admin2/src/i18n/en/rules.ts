@@ -61,8 +61,8 @@ const en: Record<string, string> = {
   'RULES.BULK_SET_GROUP_HELP': 'Applies to {n, plural, one {# selected rule} other {# selected rules}}. Leave empty to remove the group.',
   'RULES.BULK_ADD_TAG': 'Add tag',
   'RULES.BULK_REMOVE_TAG': 'Remove tag',
-  'RULES.BULK_EXPORT_JSON': 'Export selected as JSON',
-  'RULES.BULK_EXPORT_CSV': 'Export selected as CSV',
+  'RULES.BULK_EXPORT': 'Export selected',
+  'RULES.BULK_EXPORT_SKIPPED': '{n, plural, one {# rule cannot be expressed in this format and was left out.} other {# rules cannot be expressed in this format and were left out.}}',
   'RULES.BULK_DONE': '{n, plural, one {# rule updated} other {# rules updated}}',
   'RULES.CLEAR_SELECTION': 'Clear selection',
   'RULES.TAG': 'Tag',
@@ -76,5 +76,10 @@ const en: Record<string, string> = {
   'RULES.NO_MATCH_TITLE': 'No rules match',
   'RULES.NO_MATCH_TEXT': 'Try a shorter search or remove a filter.',
   'RULES.REFRESH_FAILED': 'The list could not be refreshed. What you see may be out of date.',
+  'CHECK.LAST': 'Targets last checked {when}: {dead, plural, =0 {all reachable} one {# unreachable} other {# unreachable}}.',
+  'CHECK.NEVER': 'The targets have not been checked yet.',
+  'CHECK.RUN': 'Check now',
+  'CHECK.DONE': '{checked, plural, one {# target} other {# targets}} checked, {dead} unreachable.',
+  'CHECK.TOO_SOON': 'Checked a moment ago. Try again in {n, plural, one {# second} other {# seconds}}.',
 };
 export default en;

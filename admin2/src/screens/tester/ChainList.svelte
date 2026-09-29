@@ -25,7 +25,7 @@
           {#if s.ruleId}
             <a class="rule-link mono" href="#/rules/{encodeURIComponent(s.ruleId)}" onclick={linkClick} title={t('TESTER.OPEN_RULE')}>{s.ruleId}</a>
           {/if}
-          {#if s.terminal}<span class="muted text-xs">{s.loops ? t('TESTER.STEP_LOOP_HINT') : t('TESTER.STEP_FINAL')}</span>{/if}
+          {#if s.terminal}<span class="muted text-xs">{s.loops ? t('TESTER.STEP_LOOP_HINT') : s.external ? t('TESTER.STEP_EXTERNAL') : t('TESTER.STEP_FINAL')}</span>{/if}
         </div>
       </div>
     </li>

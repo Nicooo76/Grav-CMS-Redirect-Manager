@@ -200,6 +200,9 @@
           {/if}
         </a>
       {/each}
+      {#if layout !== 'sm' && stats.pending_deletes > 0}
+        <a class="pending" href={adminUrl('/rules')} onclick={(e) => go(e, '/rules')}>{t('WIDGET.PENDING', { n: stats.pending_deletes })}</a>
+      {/if}
     </div>
   {/if}
 </section>
@@ -252,6 +255,10 @@
     display: grid;
     gap: 0.75rem;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* tiles keep their natural height when the dashboard row is taller than the widget needs */
+    align-content: start;
+  }
+  .sm .tiles {
     align-content: stretch;
   }
   .lg .tiles {
@@ -269,6 +276,20 @@
     .avg {
       display: none;
     }
+  }
+
+  .pending {
+    grid-column: 1 / -1;
+    padding: 0.5rem 0.75rem;
+    border: 1px dashed var(--border);
+    border-radius: var(--rm-r-md);
+    font-size: var(--rm-text-xs);
+    color: var(--foreground);
+    text-decoration: none;
+  }
+  .pending:hover {
+    background: color-mix(in srgb, var(--muted) 50%, transparent);
+    text-decoration: underline;
   }
 
   .tile {

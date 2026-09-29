@@ -9,13 +9,19 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
 /**
- * Dashboard numbers, live target checks and the page search: /redirects/stats, /redirects/checks, /redirects/pages.
+ * Dashboard numbers (`meta.permissions` tells what the caller may do), live target checks and the page search: /redirects/stats, /redirects/checks, /redirects/pages.
  */
 final class SystemApiController extends BaseController
 {
     public function stats(ServerRequestInterface $request): ResponseInterface
     {
-        return $this->read($request, fn (): ResponseInterface => ApiResponse::create($this->app()->stats()->dashboard()));
+        return $this->read($request, fn (): ResponseInterface => ApiResponse::create($this->app()->stats()->dashboard(), 200, [], [
+            'permissions' => [
+                'read' => $this->may($request, self::READ),
+                'manage' => $this->may($request, self::MANAGE),
+            ],
+            'default_status' => $this->app()->rules()->defaultStatus()->value,
+        ]));
     }
 
     public function checks(ServerRequestInterface $request): ResponseInterface

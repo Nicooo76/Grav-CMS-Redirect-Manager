@@ -1,8 +1,11 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { TriangleAlert, CircleAlert, Info, ArrowRight } from 'lucide-svelte';
   import Button from '../lib/ui/Button.svelte';
+  import { api } from '../lib/api';
   import { t } from '../lib/i18n.svelte';
-  import type { Issue } from '../lib/types';
+  import { validationText } from '../lib/issue-text';
+  import type { Issue, Rule } from '../lib/types';
 
   interface Props {
     issues: Issue[];
@@ -13,6 +16,29 @@
 
   const iconFor = (s: string) => (s === 'error' ? CircleAlert : s === 'warning' ? TriangleAlert : Info);
   const cls = (s: string) => (s === 'error' ? 'bad' : s === 'warning' ? 'warn' : '');
+  /** Rules another finding points at: conflicts and duplicates list rule_ids, a shadowed rule names its winner. */
+  const RELATED = new Set(['conflict', 'duplicate', 'shadowed']);
+  function relatedIds(i: Issue): string[] {
+    if (!RELATED.has(i.code)) return [];
+    const p = i.params ?? {};
+    const ids = Array.isArray(p.rule_ids) ? p.rule_ids : typeof p.rule_id === 'string' ? [p.rule_id] : [];
+    return ids.filter((x): x is string => typeof x === 'string').slice(0, 3);
+  }
+  /** id -> source of the other rule, fetched once so the button can name it */
+  const sources = $state<Record<string, string>>({});
+  $effect(() => {
+    const wanted = issues.flatMap(relatedIds);
+    untrack(() => {
+      for (const id of wanted) {
+        if (id in sources) continue;
+        sources[id] = '';
+        api
+          .get<Rule>(`/redirects/rules/${encodeURIComponent(id)}`)
+          .then(({ data }) => (sources[id] = data.source))
+          .catch(() => {});
+      }
+    });
+  });
   const chainOf = (i: Issue): string[] => (Array.isArray(i.params?.chain) ? (i.params!.chain as string[]) : []);
 </script>
 
@@ -23,7 +49,7 @@
       <li class="banner {cls(issue.severity)}" role={issue.severity === 'error' ? 'alert' : undefined}>
         <Icon size={15} />
         <div class="b-body">
-          <div>{issue.message}</div>
+          <div>{validationText(issue)}</div>
           {#if issue.code === 'chain' && chainOf(issue).length > 1}
             <div class="chain mono text-2xs">
               {#each chainOf(issue) as hop, j (j)}
@@ -36,12 +62,12 @@
               <Button size="sm" onclick={() => onshorten?.(issue.params!.shortcut as string)}>{t('EDITOR.SHORTEN', { target: issue.params!.shortcut as string })}</Button>
             </div>
           {/if}
-          {#if issue.code === 'conflict' && typeof issue.params?.other_id === 'string' && onopen}
-            <div style="margin-block-start:0.375rem">
-              <Button size="sm" onclick={() => onopen?.(issue.params!.other_id as string)}>
-                {t('EDITOR.OPEN_OTHER', { source: String(issue.params?.other_source ?? issue.params!.other_id) })}
-              </Button>
-            </div>
+          {#if onopen}
+            {#each relatedIds(issue) as other (other)}
+              <div style="margin-block-start:0.375rem">
+                <Button size="sm" onclick={() => onopen?.(other)}>{t('EDITOR.OPEN_OTHER', { source: sources[other] || other })}</Button>
+              </div>
+            {/each}
           {/if}
         </div>
       </li>

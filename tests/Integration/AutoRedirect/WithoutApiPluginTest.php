@@ -39,7 +39,7 @@ final class WithoutApiPluginTest extends IntegrationTestCase
         self::assertSame(404, $this->get('/missing')->status);
         self::assertCount(1, $this->site()->notFoundEntries());
 
-        $process = proc_open([\Grav\Plugin\RedirectManager\Tests\Integration\Support\TestSite::phpBinary(), 'bin/grav', 'scheduler', '--run=redirect-manager-maintenance'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $this->site()->dir);
+        $process = proc_open(\Grav\Plugin\RedirectManager\Tests\Integration\Support\TestSite::phpCommand('bin/grav', 'scheduler', '--run=redirect-manager-maintenance'), [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $this->site()->dir);
         self::assertIsResource($process);
         $output = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
         proc_close($process);

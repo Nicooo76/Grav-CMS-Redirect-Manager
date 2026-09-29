@@ -1,5 +1,9 @@
 enabled: true
 
+# Adds the header X-Redirect-Manager-Time (microseconds spent in the early phase) to every response the plugin
+# looked at. For measuring only (scripts/benchmark-request.sh); the environment variable REDIRECT_MANAGER_TIMING=1 does the same.
+debug_timing: false
+
 redirects:
   enabled: true
   # 0 = use system.pages.redirect_default_code for new rules

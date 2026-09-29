@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { GripVertical, Pencil, ExternalLink, FileText, Copy, FlaskConical, ArrowUp, ArrowDown, Link2, Trash2, Power } from 'lucide-svelte';
+  import { GripVertical, Eye, Pencil, ExternalLink, FileText, Copy, FlaskConical, ArrowUp, ArrowDown, Link2, Trash2, Power } from 'lucide-svelte';
   import Checkbox from '../../lib/ui/Checkbox.svelte';
   import Switch from '../../lib/ui/Switch.svelte';
   import Menu, { type MenuItem } from '../../lib/ui/Menu.svelte';
@@ -12,7 +12,7 @@
   import { formatDateTime, formatNumber, formatRelative, dailySeries } from '../../lib/format';
   import { hrefFor, linkClick, navigate } from '../../lib/router.svelte';
   import { rules } from '../../lib/state/rules.svelte';
-  import { openEditor } from '../../lib/state/app.svelte';
+  import { can, openEditor } from '../../lib/state/app.svelte';
   import { sampleFromSource } from '../../lib/sample';
   import { toInput } from '../../lib/rule-utils';
   import { canReorder } from '../../lib/rules-query';
@@ -40,12 +40,13 @@
   const problems = $derived(badges.filter((b) => !STATE_BADGES.includes(b)));
   const inactive = $derived(stateBadge !== 'active');
   const series = $derived(dailySeries(rule.stats?.daily, 30));
-  const reorderable = $derived(canReorder(rules.list));
+  const reorderable = $derived(canReorder(rules.list) && can.manage);
   const total = $derived(rule.stats?.total ?? 0);
   const noTarget = $derived(rule.status === 410 || rule.status === 451);
   const STATUS_OPTIONS = [301, 302, 307, 308, 410, 451, 200].map((v) => ({ value: String(v), label: `${v} · ${t(`STATUS.${v}`)}` }));
 
   function startEdit(field: Editing) {
+    if (!can.manage) return;
     editing = field;
     if (field === 'target') draft = rule.target;
   }
@@ -104,22 +105,29 @@
     handleEl?.focus();
   }
 
-  const items = $derived<MenuItem[]>([
-    { label: t('COMMON.EDIT'), icon: Pencil, onselect: () => navigate({ name: 'rule-edit', id: rule.id }) },
-    { label: t('RULES.ACT_DUPLICATE'), icon: Copy, onselect: () => duplicate() },
-    { label: t('RULES.ACT_TEST'), icon: FlaskConical, onselect: () => navigate({ name: 'tester', query: { url: sampleFromSource(rule.source, rule.match_type) } }) },
-    ...(problems.includes('chain') ? [{ label: t('RULES.ACT_SHORTEN'), icon: Link2, onselect: () => rules.shortenChain(rule.id) }] : []),
-    { label: rule.enabled ? t('RULES.ACT_DISABLE') : t('RULES.ACT_ENABLE'), icon: Power, onselect: () => rules.update(rule.id, { enabled: !rule.enabled }) },
-    ...(reorderable
+  const items = $derived<MenuItem[]>(
+    can.manage
       ? [
+          { label: t('COMMON.EDIT'), icon: Pencil, onselect: () => navigate({ name: 'rule-edit', id: rule.id }) },
+          { label: t('RULES.ACT_DUPLICATE'), icon: Copy, onselect: () => duplicate() },
+          { label: t('RULES.ACT_TEST'), icon: FlaskConical, onselect: () => navigate({ name: 'tester', query: { url: sampleFromSource(rule.source, rule.match_type) } }) },
+          ...(problems.includes('chain') ? [{ label: t('RULES.ACT_SHORTEN'), icon: Link2, onselect: () => rules.shortenChain(rule.id) }] : []),
+          { label: rule.enabled ? t('RULES.ACT_DISABLE') : t('RULES.ACT_ENABLE'), icon: Power, onselect: () => rules.update(rule.id, { enabled: !rule.enabled }) },
+          ...(reorderable
+            ? [
+                { separator: true, label: '' },
+                { label: t('RULES.ACT_MOVE_UP'), icon: ArrowUp, disabled: index === 0, onselect: () => move(-1) },
+                { label: t('RULES.ACT_MOVE_DOWN'), icon: ArrowDown, disabled: index === count - 1, onselect: () => move(1) },
+              ]
+            : []),
           { separator: true, label: '' },
-          { label: t('RULES.ACT_MOVE_UP'), icon: ArrowUp, disabled: index === 0, onselect: () => move(-1) },
-          { label: t('RULES.ACT_MOVE_DOWN'), icon: ArrowDown, disabled: index === count - 1, onselect: () => move(1) },
+          { label: t('COMMON.DELETE'), icon: Trash2, danger: true, onselect: () => rules.remove([rule.id]) },
         ]
-      : []),
-    { separator: true, label: '' },
-    { label: t('COMMON.DELETE'), icon: Trash2, danger: true, onselect: () => rules.remove([rule.id]) },
-  ]);
+      : [
+          { label: t('COMMON.VIEW'), icon: Eye, onselect: () => navigate({ name: 'rule-edit', id: rule.id }) },
+          { label: t('RULES.ACT_TEST'), icon: FlaskConical, onselect: () => navigate({ name: 'tester', query: { url: sampleFromSource(rule.source, rule.match_type) } }) },
+        ],
+  );
 
   function duplicate() {
     openEditor({ prefill: { ...toInput(rule), origin: 'manual' } });
@@ -160,7 +168,7 @@
   {#if cols.status}
     <td class="c-status keep">
       <div class="cell">
-        <Switch checked={rule.enabled} label={t('RULES.TOGGLE_ENABLED', { source: rule.source })} onchange={(v) => rules.update(rule.id, { enabled: v })} />
+        <Switch checked={rule.enabled} disabled={!can.manage} label={t('RULES.TOGGLE_ENABLED', { source: rule.source })} onchange={(v) => rules.update(rule.id, { enabled: v })} />
         {#key stateBadge}<RuleBadge kind={stateBadge} animate={rules.animate} />{/key}
         {#each problems.slice(0, 1) as p (p)}<RuleBadge kind={p} animate={rules.animate} />{/each}
         {#each problems.slice(1) as p (p)}<RuleBadge kind={p} animate={rules.animate} compact />{/each}
@@ -187,11 +195,18 @@
       {:else if noTarget}
         <span class="muted">—</span>
       {:else}
-        <button type="button" class="cell-edit" onclick={() => startEdit('target')} title={t('RULES.EDIT_TARGET_HINT')} aria-label={t('RULES.EDIT_TARGET_BTN', { target: rule.target })}>
-          {#if rule.target_type === 'url'}<ExternalLink size={12} class="ti" />{:else if rule.target_type === 'page'}<FileText size={12} class="ti" />{/if}
-          <span class="mono truncate">{rule.target}</span>
-          <Pencil size={12} class="pen" />
-        </button>
+        {#if can.manage}
+          <button type="button" class="cell-edit" onclick={() => startEdit('target')} title={t('RULES.EDIT_TARGET_HINT')} aria-label={t('RULES.EDIT_TARGET_BTN', { target: rule.target })}>
+            {#if rule.target_type === 'url'}<ExternalLink size={12} class="ti" />{:else if rule.target_type === 'page'}<FileText size={12} class="ti" />{/if}
+            <span class="mono truncate">{rule.target}</span>
+            <Pencil size={12} class="pen" />
+          </button>
+        {:else}
+          <span class="cell-edit static">
+            {#if rule.target_type === 'url'}<ExternalLink size={12} class="ti" />{:else if rule.target_type === 'page'}<FileText size={12} class="ti" />{/if}
+            <span class="mono truncate">{rule.target}</span>
+          </span>
+        {/if}
       {/if}
     </td>
   {/if}
@@ -213,9 +228,13 @@
           </select>
         </span>
       {:else}
-        <button type="button" class="cell-edit code" onclick={() => startEdit('status')} use:tooltip={t(`STATUS.${rule.status}`)} aria-label={t('RULES.EDIT_STATUS_BTN', { status: rule.status, label: t(`STATUS.${rule.status}`) })}>
-          <span class="num">{rule.status}</span>
-        </button>
+        {#if can.manage}
+          <button type="button" class="cell-edit code" onclick={() => startEdit('status')} use:tooltip={t(`STATUS.${rule.status}`)} aria-label={t('RULES.EDIT_STATUS_BTN', { status: rule.status, label: t(`STATUS.${rule.status}`) })}>
+            <span class="num">{rule.status}</span>
+          </button>
+        {:else}
+          <span class="cell-edit code static"><span class="num">{rule.status}</span></span>
+        {/if}
       {/if}
     </td>
   {/if}
@@ -315,7 +334,10 @@
     text-align: start;
     color: var(--foreground);
   }
-  .cell-edit:hover {
+  .cell-edit.static {
+    cursor: default;
+  }
+  .cell-edit:hover:not(.static) {
     background: color-mix(in srgb, var(--accent) 80%, transparent);
   }
   .cell-edit :global(.pen) {

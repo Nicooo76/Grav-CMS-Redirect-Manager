@@ -324,7 +324,7 @@ All seven were open when the audit began. `275530f` fixes them and replaces the 
 | J-4g | Multilanguage | done | I-25 | |
 | J-4h | Cache invalidation | done | I-8 | |
 | J-4i | Installation and uninstallation without log errors | done | `I:ReleaseTest` (8 steps: clean site, install, frontend, REST, every CLI command, scheduler jobs, uninstall keeps data and site works, reinstall picks up kept data; after each step `grav.log` and the server log must have no new warning, notice, error or deprecation); auditor run: gpm on PHP 8.4 (165 assertions) and manual on PHP 8.3 (164 assertions) both OK | The test skips unless `RM_RELEASE_ZIP` is set: it is not part of `composer integration`. It runs through `scripts/test-release.sh` and the CI job `release-check`. The ZIP used was built 17:29, before the last working-tree changes. |
-| J-4j | Integration on PHP 8.3 and 8.4 | partial | CI matrix in `.github/workflows/tests.yml` (8.3, 8.4, 8.5) runs `composer integration`; auditor ran a 89-test sample on PHP 8.3 and the release test on 8.3 and 8.4 | The full integration suite was not re-run by the auditor on either version. |
+| J-4j | Integration on PHP 8.3 and 8.4 | done | Final acceptance run on 2026-09-29 (commit `157bcc1`): full integration suite, 549 tests, green with the test server on PHP 8.3 (three runs) and on PHP 8.4; the 8 skips are `ReleaseTest`, run separately by `scripts/test-release.sh` (8/8). One earlier 8.3 run had a single failure that did not repeat in three further runs; the admin API timing budgets are scaled on CI (`RM_PERF_FACTOR=3`). PHP 8.3's built-in server skips `auto_prepend_file` before router scripts, fixed in the test site (own router). | |
 | J-5a | Playwright: create, edit | done | `P:rules-crud.spec.ts` "create through the editor (n opens it), live preview, save, frontend redirects", "edit in the editor: change target and note, save", "inline edit of the target and the status code" | Asserts through UI, API and the public site. |
 | J-5b | Playwright: delete with undo | done | G-15 | |
 | J-5c | Playwright: bulk | done | `P:bulk.spec.ts` (9 tests) | |
@@ -334,7 +334,7 @@ All seven were open when the audit began. `275530f` fixes them and replaces the 
 | J-5g | Playwright: keyboard shortcuts | done | `P:keyboard.spec.ts` (17 tests, the 2 focus tests were `test.fixme` before `275530f`, KI-2) | |
 | J-5h | Playwright: dark-mode screenshot comparison | done | `P:visual.spec.ts`: 7 screens (rules, editor new with preview, editor with chain warning, 404 monitor, suggestions, tester with a chain, import) x light and dark, `toHaveScreenshot` with `maxDiffPixelRatio 0.005`; baselines in `tests/ui/specs/__screenshots__/darwin/visual.spec.ts` | Baselines exist for darwin only. On Linux CI the group skips itself until baselines are generated through the manual `tests` workflow run and committed (`tests/ui/README.md`). Generating them in the official Playwright Docker image was tried and not possible here: the Docker Desktop engine of the machine was down (stopped since "no space left on device", the app could not be started from the session). The recipe is in `tests/ui/README.md`. Settings, export and widget are not in the visual set. |
 | J-5i | Playwright: axe, no serious or critical | done | G-20 (`P:a11y.spec.ts`, 22 tests) | With the caveats of G-20 and KI-6. |
-| J-5j | Playwright suite green | partial | 189 tests listed (`npx playwright test --list`) | Not executed by the auditor (another agent owns ports 84xx). The committed state has 3 `test.fixme` (KI-1, KI-2). Auditor ran 83 of 189 (subset above), all passed. The other 106 were not run by the auditor. |
+| J-5j | Playwright suite green | done | Final acceptance run on 2026-09-29: `npx playwright test` in `tests/ui`, 271 passed, 1 skipped (`page-panel.spec.ts` screenshot helper, runs only with `RM_SHOTS=1`), no `test.fixme` left. | Visual baselines exist for darwin; Linux baselines come from the manual `visual_baselines` workflow input (J-5h). |
 | J-6a | PHPStan level 8 | done | `phpstan.neon.dist` (level 8, `classes`, `cli`, `redirect-manager.php`, no baseline, no `ignoreErrors`); auditor: 0 errors on PHP 8.3 and 8.4 | |
 | J-6b | CS Fixer PSR-12 | done | `.php-cs-fixer.dist.php` (`@PSR12`, `declare_strict_types`, ordered imports; covers `classes`, `cli`, `tests`); auditor: 0 of 436 files | |
 | J-6c | No deprecations under PHP 8.4 | done | `phpunit.xml.dist` (`failOnDeprecation`, `failOnWarning`, `failOnRisky`, `error_reporting -1`); unit suite on PHP 8.4.26 at HEAD: no deprecation, no warning | Integration and Playwright were not run under 8.4 by the auditor. |
@@ -365,8 +365,8 @@ All seven were open when the audit began. `275530f` fixes them and replaces the 
 
 | Status | Rows |
 |---|---:|
-| `done` | 226 |
-| `partial` | 10 |
+| `done` | 228 |
+| `partial` | 8 |
 | `not possible in Grav 2` | 4 |
 | `missing` | 0 |
 | **Total** | **240** |
@@ -384,7 +384,7 @@ By section:
 | G Admin 2 interface | 38 | 1 | 0 | 0 |
 | H Import, export, CLI, API, MCP, events, webhooks, Twig | 31 | 0 | 4 | 0 |
 | I Architecture, performance, security, compatibility | 26 | 3 | 0 | 0 |
-| J Tests | 43 | 3 | 0 | 0 |
+| J Tests | 45 | 1 | 0 | 0 |
 | K Deliverables and acceptance criteria | 12 | 2 | 0 | 0 |
 
 A row is one testable requirement or sub-item of the brief (`C-5c`, `H-1d`, `J-2g`, ...). Known issues KI-1 to KI-7 were fixed during the audit and are folded into their rows. NF-2 to NF-4 are findings, not rows; they are covered by gaps 27 (NF-2), 34 (NF-3) and 8 (NF-4); NF-1 is fixed.

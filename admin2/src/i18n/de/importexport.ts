@@ -129,7 +129,7 @@ const de: Record<string, string> = {
   'IMPORTEXPORT.EXPORT_SKIPPED_MORE': '… und {n} weitere.',
 
   'IMPORTEXPORT.SITE_TITLE': 'Grav-Website-Konfiguration',
-  'IMPORTEXPORT.SITE_TEXT': 'Grav wendet site.redirects und site.routes aus user/config/site.yaml selbst an, bevor dieses Plugin läuft. Im Redirect Manager lassen sie sich übernehmen, um sie hier zu testen, zu zählen und zu verwalten. Die site.yaml bleibt unverändert.',
+  'IMPORTEXPORT.SITE_TEXT': 'Dieses Plugin greift zuerst, gleich am Anfang der Anfrage. Grav wendet site.redirects und site.routes aus user/config/site.yaml nur an, wenn hier keine Regel getroffen hat und es für die URL keine abrufbare Seite gibt. Übernehmen Sie beide in den Redirect Manager, um sie hier zu testen, zu zählen und zu verwalten. Ihre site.yaml bleibt unverändert.',
   'IMPORTEXPORT.SITE_IMPORT': 'In den Redirect Manager übernehmen',
   'IMPORTEXPORT.SITE_IMPORTED': '{created} übernommen, {skipped} übersprungen, weil es sie schon gibt.',
   'IMPORTEXPORT.SITE_ENTRIES': '{n, plural, one {# Eintrag} other {# Einträge}}',

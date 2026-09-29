@@ -203,7 +203,10 @@ final class NotFoundService
     /**
      * Adds a glob to `log.ignore_patterns` and optionally deletes the logged paths it matches.
      *
-     * @return array{pattern: string, patterns: list<string>, purged: int}
+     * "purged" counts the deleted log entries (one per logged request), "purged_paths" the distinct paths they belonged
+     * to, which is what the 404 monitor lists.
+     *
+     * @return array{pattern: string, patterns: list<string>, purged: int, purged_paths: int}
      */
     public function ignore(string $pattern, bool $purge): array
     {
@@ -237,10 +240,13 @@ final class NotFoundService
             $this->config->saveIgnorePatterns($patterns);
         }
 
+        $purged = $purge ? $this->purgeMatching(new IgnoreList([$pattern])) : ['entries' => 0, 'paths' => 0];
+
         return [
             'pattern' => $pattern,
             'patterns' => $patterns,
-            'purged' => $purge ? $this->purgeMatching(new IgnoreList([$pattern])) : 0,
+            'purged' => $purged['entries'],
+            'purged_paths' => $purged['paths'],
         ];
     }
 
@@ -384,8 +390,12 @@ final class NotFoundService
         return $this->suggester ??= new Suggester($this->services->pageIndex());
     }
 
-    /** Deletes every logged path (last 366 days, bots included) that the ignore list matches. */
-    private function purgeMatching(IgnoreList $list): int
+    /**
+     * Deletes every logged path (last 366 days, bots included) that the ignore list matches.
+     *
+     * @return array{entries: int, paths: int} deleted log entries and the paths they belonged to
+     */
+    private function purgeMatching(IgnoreList $list): array
     {
         $now = $this->now();
         $from = $this->startOfDay($now, self::MAX_DAYS);
@@ -412,12 +422,15 @@ final class NotFoundService
             ++$page;
         } while ($result->rows !== [] && ($page - 1) * GroupQuery::MAX_PER_PAGE < $result->total);
 
-        $purged = 0;
+        $entries = 0;
+        $deletedPaths = 0;
         foreach ($paths as $path) {
-            $purged += $store->deletePath($path);
+            $deleted = $store->deletePath($path);
+            $entries += $deleted;
+            $deletedPaths += $deleted > 0 ? 1 : 0;
         }
 
-        return $purged;
+        return ['entries' => $entries, 'paths' => $deletedPaths];
     }
 
     private function now(): DateTimeImmutable

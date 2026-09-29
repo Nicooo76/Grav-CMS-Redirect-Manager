@@ -4,6 +4,8 @@ import { importIssueText, textParams, validationText } from './issue-text';
 const DICT: Record<string, string> = {
   'PLUGIN_REDIRECT_MANAGER.IMPORT.ISSUE.TOO_MANY_ROWS': 'Mehr Zeilen als die Grenze von {max}.',
   'PLUGIN_REDIRECT_MANAGER.VALIDATION.LOOP': 'Schleife: {chain}.',
+  'PLUGIN_REDIRECT_MANAGER.VALIDATION.SELF_REDIRECT': 'Ziel ist die eigene Quelle: {chain}.',
+  'PLUGIN_REDIRECT_MANAGER.VALIDATION.SELF_REDIRECT_CASE': 'Nur die Schreibung unterscheidet sich ({chain}).',
   'PLUGIN_REDIRECT_MANAGER.VALIDATION.CHAIN': 'Kette mit {hops} Schritten: {chain}.',
   'PLUGIN_REDIRECT_MANAGER.VALIDATION.CHAIN_SHORTCUT': 'Direkt auf {shortcut} zeigen.',
   'PLUGIN_REDIRECT_MANAGER.VALIDATION.CHAIN_INCOMING': 'Eine andere Regel läuft hier weiter: {chain}.',
@@ -53,5 +55,13 @@ describe('validationText', () => {
   it('translates by code and leaves codeless issues alone', () => {
     expect(validationText({ code: 'loop', message: 'en', params: { chain: ['/x', '/y', '/x'] } })).toBe('Schleife: /x → /y → /x.');
     expect(validationText({ code: '', message: 'plain' })).toBe('plain');
+  });
+});
+
+describe('validationText: self redirect', () => {
+  it('uses the letter-case wording only when the server says the paths differ only in case', () => {
+    const base = { code: 'self_redirect', message: 'The target resolves to the rule\'s own source.' };
+    expect(validationText({ ...base, params: { chain: ['/A', '/a'], case_only: true } })).toBe('Nur die Schreibung unterscheidet sich (/A → /a).');
+    expect(validationText({ ...base, params: { chain: ['/a', '/a'] } })).toBe('Ziel ist die eigene Quelle: /a → /a.');
   });
 });

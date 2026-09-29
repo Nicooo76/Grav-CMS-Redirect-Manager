@@ -103,6 +103,20 @@ final class ChainAnalyzerTest extends TestCase
         self::assertNotNull(AnalysisFixtures::find($report->issuesFor('a'), 'self_redirect'));
     }
 
+    public function testCaseOnlySelfReferenceSaysSoAndOtherOnesDoNot(): void
+    {
+        $issue = AnalysisFixtures::find($this->analyze([self::r('a', '/About', '/about')])->issuesFor('a'), 'self_redirect');
+        self::assertNotNull($issue);
+        self::assertTrue($issue->params['case_only'] ?? false, 'the editor offers "make the rule case-sensitive"');
+        self::assertStringContainsString('letter case', $issue->message);
+        self::assertStringContainsString('case-sensitive', $issue->message);
+
+        $plain = AnalysisFixtures::find($this->analyze([self::r('a', '/a', '/a')])->issuesFor('a'), 'self_redirect');
+        self::assertNotNull($plain);
+        self::assertArrayNotHasKey('case_only', $plain->params);
+        self::assertStringNotContainsString('letter case', $plain->message);
+    }
+
     public function testCaseSensitiveRuleDoesNotLoopOnCaseChange(): void
     {
         $report = $this->analyze([self::r('a', '/About', '/about', ['case_sensitive' => true])]);

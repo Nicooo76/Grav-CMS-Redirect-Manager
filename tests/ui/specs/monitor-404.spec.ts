@@ -194,6 +194,21 @@ test.describe('404 monitor', () => {
     await expect(nfRow(app, '/about-us').getByRole('link', { name: 'Edit the rule for /about-us' })).toBeVisible();
   });
 
+  test('"Create redirect" for a path that differs from its suggestion only in case creates a case-sensitive rule', async ({ app, api }) => {
+    await app.goto('#/404');
+    await nfRow(app, '/shop/Zelte').getByRole('button', { name: 'Create redirect for /shop/Zelte' }).click();
+    await expect(app.field('Source')).toHaveValue('/shop/Zelte');
+    await expect(app.field('Target')).toHaveValue('/shop/zelte');
+    await expect(app.editor.getByRole('list', { name: 'Checks' }).getByRole('alert')).toHaveCount(0);
+    await expect(app.editor.getByRole('checkbox', { name: /Case sensitive/ })).toBeChecked();
+
+    await app.editor.getByRole('button', { name: 'Create redirect' }).click();
+    await expect(app.editor).toBeHidden();
+    await expect(app.toast('Redirect created for /shop/Zelte.')).toBeVisible();
+    const rule = (await api('GET', '/redirects/rules?q=/shop/Zelte')).data.find((r: any) => r.source === '/shop/Zelte');
+    expect(rule).toMatchObject({ target: '/shop/zelte', case_sensitive: true });
+  });
+
   test('clicking the suggestion badge creates a redirect the same way', async ({ app, api }) => {
     await app.goto('#/404');
     await nfRow(app, '/blog/wintercamping-tips').getByRole('button', { name: /Create a redirect to \/blog\/wintercamping-tipps/ }).click();
@@ -216,7 +231,7 @@ test.describe('404 monitor', () => {
     await pattern.fill('/shop/*');
     await dialog.getByRole('button', { name: 'Ignore and remove entries' }).click();
     await expect(dialog).toBeHidden();
-    await expect(app.toast(/Ignoring \/shop\/\*\. \d+ paths? removed from the log\./)).toBeVisible();
+    await expect(app.toast(/Ignoring \/shop\/\*\. 3 paths removed from the log\./)).toBeVisible();
 
     for (const path of ['/shop/rucksack', '/shop/Zelte', '/shop/Rucksaecke']) await expect(nfRow(app, path)).toHaveCount(0);
     await expect(nfRows(app)).toHaveCount(Object.keys(DEFAULT_PATHS).length - 3);
@@ -249,7 +264,7 @@ test.describe('404 monitor', () => {
     await openMenu(app, '/gibt-es-nicht', /^Ignore/);
     const dialog = hostDialog(app.page, 'Ignore 404 pattern');
     await dialog.getByRole('button', { name: 'Ignore and remove entries' }).click();
-    await expect(app.toast(/Ignoring \/gibt-es-nicht\. \d+ paths? removed from the log\./)).toBeVisible();
+    await expect(app.toast(/Ignoring \/gibt-es-nicht\. 1 path removed from the log\./)).toBeVisible();
     await expect(nfRow(app, '/gibt-es-nicht')).toHaveCount(0);
     await expect(nfRows(app)).toHaveCount(Object.keys(DEFAULT_PATHS).length - 1);
     expect(ignorePatterns(site.dir)).toContain('/gibt-es-nicht');

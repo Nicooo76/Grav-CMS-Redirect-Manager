@@ -400,13 +400,13 @@ final class AutoRedirectControllerTest extends GravTestCase
         AbstractApiController::$granted = [BaseController::READ];
         self::assertSame(200, $this->api->pending(new FakeServerRequest())->getStatusCode());
         self::assertSame(200, $this->api->badge(new FakeServerRequest())->getStatusCode());
-        self::assertSame(200, $this->api->badgeSeen(new FakeServerRequest())->getStatusCode());
+        self::assertInstanceOf(ForbiddenException::class, self::thrownBy(fn () => $this->api->badgeSeen(new FakeServerRequest())), 'the seen state is shared: only people who can act on rules clear it');
         self::assertInstanceOf(ForbiddenException::class, self::thrownBy(fn () => $this->api->resolve(new FakeServerRequest(body: ['action' => 'gone'], routeParams: ['id' => $id]))));
 
         AbstractApiController::$granted = [BaseController::MANAGE];
         self::assertInstanceOf(ForbiddenException::class, self::thrownBy(fn () => $this->api->pending(new FakeServerRequest())));
         self::assertInstanceOf(ForbiddenException::class, self::thrownBy(fn () => $this->api->badge(new FakeServerRequest())));
-        self::assertInstanceOf(ForbiddenException::class, self::thrownBy(fn () => $this->api->badgeSeen(new FakeServerRequest())));
+        self::assertSame(200, $this->api->badgeSeen(new FakeServerRequest())->getStatusCode(), 'clearing needs manage only');
         self::assertSame(1, $this->services->autoState()->pendingCount());
     }
 

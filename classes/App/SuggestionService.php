@@ -21,6 +21,7 @@ use Grav\Plugin\RedirectManager\NotFound\SortDirection;
 use Grav\Plugin\RedirectManager\Suggest\Suggester;
 use Grav\Plugin\RedirectManager\Suggest\Suggestion;
 use Grav\Plugin\RedirectManager\Suggest\SuggestionStore;
+use Grav\Plugin\RedirectManager\Util\PathNormalizer;
 use Throwable;
 
 /**
@@ -426,7 +427,7 @@ final class SuggestionService
         }
         // A path that differs from its target only in case (/shop/Rucksaecke to /shop/rucksaecke) is a loop for a
         // case-insensitive rule. Grav routes are case sensitive, so the rule has to be as well.
-        if ($fields['target_type'] === 'page' && $fields['source'] !== $target && strcasecmp($fields['source'], $target) === 0) {
+        if ($fields['target_type'] === 'page' && PathNormalizer::differsOnlyInCase($fields['source'], $target)) {
             $fields['case_sensitive'] = true;
         }
         if (StatusCode::tryFrom(is_numeric($status) ? (int) $status : 0)?->needsTarget() === false) {

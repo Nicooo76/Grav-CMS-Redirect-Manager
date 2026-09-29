@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Grav\Plugin\RedirectManager\Analysis;
 
 use Grav\Plugin\RedirectManager\Domain\Rule;
+use Grav\Plugin\RedirectManager\Util\PathNormalizer;
 
 /**
  * Builds the ValidationIssue objects for analysis findings, in one place so the analyzer and the validator
@@ -126,7 +127,16 @@ final class IssueFactory
         $params = self::chainParams($o, $languages);
         switch ($o->kind) {
             case ChainOutcome::SELF:
-                return ValidationIssue::error('self_redirect', 'target', 'The target resolves to the rule\'s own source: ' . implode(' -> ', $o->paths) . '.', $params);
+                $message = 'The target resolves to the rule\'s own source: ' . implode(' -> ', $o->paths) . '.';
+                if (self::differsOnlyInCase($o->paths)) {
+                    // The most common way into this error (404 suggestions such as /shop/Zelte to /shop/zelte), and one
+                    // with a one-click fix: the editor offers to make the rule case-sensitive (params.case_only).
+                    $params['case_only'] = true;
+                    $message = 'The target differs from the source only in letter case (' . implode(' -> ', $o->paths)
+                        . '), and a case-insensitive rule matches its own target. Make the rule case-sensitive.';
+                }
+
+                return ValidationIssue::error('self_redirect', 'target', $message, $params);
             case ChainOutcome::LOOP:
                 return ValidationIssue::error('loop', 'target', 'Redirect loop: ' . implode(' -> ', $o->paths) . '.', $params);
             case ChainOutcome::TOO_DEEP:
@@ -145,6 +155,28 @@ final class IssueFactory
         }
 
         return ValidationIssue::warning('chain', 'target', $message, $params);
+    }
+
+    /**
+     * True when the paths are not all identical but every one equals the first ignoring case.
+     *
+     * @param list<string> $paths
+     */
+    private static function differsOnlyInCase(array $paths): bool
+    {
+        $first = $paths[0] ?? null;
+        if ($first === null || count($paths) < 2) {
+            return false;
+        }
+        $differs = false;
+        foreach ($paths as $path) {
+            if ($first !== $path && !PathNormalizer::differsOnlyInCase($first, $path)) {
+                return false;
+            }
+            $differs = $differs || $first !== $path;
+        }
+
+        return $differs;
     }
 
     /**

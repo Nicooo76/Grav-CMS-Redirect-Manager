@@ -52,6 +52,38 @@ test.describe('rule editor: checks and validation', () => {
     expect((await ruleOf(api, '/loop-b')).target).toBe('/loop-c');
   });
 
+  test('a case-only self redirect says so and the button makes the rule case-sensitive', async ({ app, api }) => {
+    await openNewEditor(app);
+    await app.field('Source').fill('/Selbst-Test');
+    await app.field('Target').fill('/selbst-test');
+    const alert = checks(app).getByRole('alert');
+    await expect(alert).toContainText('differs from the source only in letter case');
+    await expect(createButton(app)).toBeDisabled();
+
+    await alert.getByRole('button', { name: 'Make the rule case-sensitive' }).click();
+    await expect(alert).toHaveCount(0);
+    await expect(app.editor.getByRole('checkbox', { name: /Case sensitive/ })).toBeChecked();
+    await expect(createButton(app)).toBeEnabled();
+    await createButton(app).click();
+    await expect(app.toast('Redirect created')).toBeVisible();
+    expect(await ruleOf(api, '/Selbst-Test')).toMatchObject({ target: '/selbst-test', case_sensitive: true });
+  });
+
+  test('the preview says "No match" (and never stays on "Checking...") when no rule matches the sample', async ({ app }) => {
+    await openNewEditor(app);
+    await app.field('Source').fill('/blog/*');
+    await app.field('Target').fill('/journal');
+    const result = app.editor.locator('#pv-result');
+    await expect(result).toContainText('No match');
+    await expect(result).toContainText('No rule matches this URL');
+    await expect(result).not.toContainText('Checking');
+
+    // a sample that does match shows the result again
+    await sampleField(app).fill('/blog/*');
+    await matchType(app, 'wildcard').click();
+    await expect(result).toContainText('/journal');
+  });
+
   test('a rule that points at its own source is refused', async ({ app, api }) => {
     await openNewEditor(app);
     await app.field('Source').fill('/selbst');

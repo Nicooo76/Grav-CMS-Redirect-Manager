@@ -201,6 +201,7 @@ en:
       REGEX_INVALID: The regular expression is invalid.
       REGEX_TOO_LONG: The regular expression is too long.
       SELF_REDIRECT: "The target resolves to the rule's own source: {chain}."
+      SELF_REDIRECT_CASE: "The target differs from the source only in letter case ({chain}). A case-insensitive rule matches its own target and would loop. Make the rule case-sensitive."
       SHADOWED: A higher-ranked rule matches this source first, so this rule never applies.
       SOURCE_EMPTY: The source is empty.
       SOURCE_INVALID: The source must be a path such as /old-page, not a full URL, and it must be a valid path.
@@ -365,6 +366,7 @@ en:
         ERR_TARGET_REQUIRED: "Enter a target, or choose status 410 or 451 for pages that are gone."
         EXPIRES_AT: "Expires at"
         EXPIRES_AT_HELP: "The rule stops at this time, for example the end of a campaign."
+        FIX_CASE: "Make the rule case-sensitive"
         FIX_FIELDS: "Some fields need attention."
         GROUP: "Group"
         GROUP_HELP: "Pick a group or type a new name."
@@ -397,7 +399,10 @@ en:
         PARAM_VALUE: "Value"
         PREVIEW_ARROW: "redirects to"
         PREVIEW_EMPTY: "Enter a source to see what this rule does."
+        PREVIEW_IDLE: "No preview yet. Enter a URL, and fix the errors under Checks."
         PREVIEW_NO_MATCH: "No match"
+        PREVIEW_NO_RULE: "No rule matches this URL, not even this one."
+        PREVIEW_REASON_OTHER_RULE: "Another rule takes this URL first."
         PREVIEW_TITLE: "Try a URL"
         PREVIEW_UNAVAILABLE: "The preview is not available right now."
         PREVIEW_WAIT: "Checking…"
@@ -607,7 +612,7 @@ en:
         SITE_REDIRECTS_HELP: "Visitors are sent to the target."
         SITE_ROUTES_HELP: "Visitors keep the URL and see the target page."
         SITE_TABLE: "{name}, {n} entries"
-        SITE_TEXT: "Grav applies site.redirects and site.routes from user/config/site.yaml by itself, before this plugin runs. Copy them into Redirect Manager to test, count and manage them here. Your site.yaml stays as it is."
+        SITE_TEXT: "This plugin matches first, at the start of the request. Grav applies site.redirects and site.routes from user/config/site.yaml only when no rule here matched and no routable page exists for the URL. Copy them into Redirect Manager to test, count and manage them here. Your site.yaml stays as it is."
         SITE_TITLE: "Grav site configuration"
         TABLE_CAPTION: "Rows found in the file, with problems marked"
         TILE_DUPLICATES: "Duplicates"
@@ -1225,6 +1230,7 @@ de:
       REGEX_INVALID: Der reguläre Ausdruck ist ungültig.
       REGEX_TOO_LONG: Der reguläre Ausdruck ist zu lang.
       SELF_REDIRECT: 'Das Ziel führt auf die eigene Quelle der Regel: {chain}.'
+      SELF_REDIRECT_CASE: 'Das Ziel unterscheidet sich von der Quelle nur in der Groß- und Kleinschreibung ({chain}). Eine Regel ohne Unterscheidung trifft ihr eigenes Ziel und würde sich im Kreis drehen. Stellen Sie die Regel auf „Groß- und Kleinschreibung beachten“ um.'
       SHADOWED: Eine Regel mit höherem Rang trifft diese Quelle zuerst. Diese Regel greift deshalb nie.
       SOURCE_EMPTY: Die Quelle ist leer.
       SOURCE_INVALID: Die Quelle muss ein Pfad wie /alte-seite sein, keine vollständige URL, und der Pfad muss gültig sein.
@@ -1389,6 +1395,7 @@ de:
         ERR_TARGET_REQUIRED: "Ziel angeben oder Status 410 bzw. 451 für entfernte Seiten wählen."
         EXPIRES_AT: "Läuft ab am"
         EXPIRES_AT_HELP: "Die Regel endet zu diesem Zeitpunkt, zum Beispiel mit dem Ende einer Kampagne."
+        FIX_CASE: "Groß- und Kleinschreibung beachten"
         FIX_FIELDS: "Einige Felder müssen korrigiert werden."
         GROUP: "Gruppe"
         GROUP_HELP: "Gruppe auswählen oder neuen Namen eingeben."
@@ -1421,7 +1428,10 @@ de:
         PARAM_VALUE: "Wert"
         PREVIEW_ARROW: "leitet weiter nach"
         PREVIEW_EMPTY: "Quelle eingeben, um zu sehen, was die Regel tut."
+        PREVIEW_IDLE: "Noch keine Vorschau. Geben Sie eine URL ein und beheben Sie die Fehler unter „Prüfungen“."
         PREVIEW_NO_MATCH: "Kein Treffer"
+        PREVIEW_NO_RULE: "Keine Regel trifft diese URL, auch diese nicht."
+        PREVIEW_REASON_OTHER_RULE: "Eine andere Regel bearbeitet diese URL zuerst."
         PREVIEW_TITLE: "URL ausprobieren"
         PREVIEW_UNAVAILABLE: "Die Vorschau ist gerade nicht verfügbar."
         PREVIEW_WAIT: "Prüft …"
@@ -1631,7 +1641,7 @@ de:
         SITE_REDIRECTS_HELP: "Besucher werden zum Ziel weitergeleitet."
         SITE_ROUTES_HELP: "Besucher behalten die URL und sehen die Zielseite."
         SITE_TABLE: "{name}, {n} Einträge"
-        SITE_TEXT: "Grav wendet site.redirects und site.routes aus user/config/site.yaml selbst an, bevor dieses Plugin läuft. Im Redirect Manager lassen sie sich übernehmen, um sie hier zu testen, zu zählen und zu verwalten. Die site.yaml bleibt unverändert."
+        SITE_TEXT: "Dieses Plugin greift zuerst, gleich am Anfang der Anfrage. Grav wendet site.redirects und site.routes aus user/config/site.yaml nur an, wenn hier keine Regel getroffen hat und es für die URL keine abrufbare Seite gibt. Übernehmen Sie beide in den Redirect Manager, um sie hier zu testen, zu zählen und zu verwalten. Ihre site.yaml bleibt unverändert."
         SITE_TITLE: "Grav-Website-Konfiguration"
         TABLE_CAPTION: "In der Datei gefundene Zeilen, Probleme markiert"
         TILE_DUPLICATES: "Duplikate"

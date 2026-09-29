@@ -143,4 +143,12 @@ final class PathNormalizerTest extends TestCase
     {
         self::assertSame([$path, $query], PathNormalizer::splitSource($source));
     }
+
+    public function testDifferInCaseOnly(): void
+    {
+        self::assertTrue(PathNormalizer::differsOnlyInCase('/shop/Zelte', '/shop/zelte'));
+        self::assertTrue(PathNormalizer::differsOnlyInCase('/Über', '/über'));
+        self::assertFalse(PathNormalizer::differsOnlyInCase('/shop/zelte', '/shop/zelte'), 'identical is a plain self redirect, not a case difference');
+        self::assertFalse(PathNormalizer::differsOnlyInCase('/shop/Zelte', '/shop/zelt'));
+    }
 }

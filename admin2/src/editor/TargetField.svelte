@@ -5,6 +5,7 @@
   import Field from '../lib/ui/Field.svelte';
   import { t, locale } from '../lib/i18n.svelte';
   import { formatPercent } from '../lib/format';
+  import { differsOnlyInCase, isSitePath } from '../lib/rule-utils';
   import type { RuleForm } from '../lib/editor-form';
   import type { SuggestionCandidate, TargetType } from '../lib/types';
 
@@ -26,6 +27,8 @@
   function pickCandidate(c: SuggestionCandidate) {
     form.target = c.target;
     form.target_type = /^https?:\/\//i.test(c.target) ? 'url' : 'page';
+    // /shop/Zelte -> /shop/zelte: the rule must tell the two apart or it matches its own target
+    if (form.match_type === 'exact' && isSitePath(c.target) && differsOnlyInCase(form.source, c.target)) form.case_sensitive = true;
   }
 
   const types = $derived([

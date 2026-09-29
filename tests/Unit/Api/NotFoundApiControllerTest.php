@@ -133,6 +133,7 @@ final class NotFoundApiControllerTest extends ApiTestCase
         self::assertSame('/wp-login.php', $data['pattern']);
         self::assertContains('/wp-login.php', $data['patterns']);
         self::assertSame(1, $data['purged']);
+        self::assertSame(1, $data['purged_paths']);
     }
 
     public function testIgnoreWithoutPurgeKeepsTheLoggedHits(): void
@@ -142,6 +143,7 @@ final class NotFoundApiControllerTest extends ApiTestCase
         $data = self::data($this->api->ignore(new FakeServerRequest(body: ['pattern' => '/wp-login.php'])));
 
         self::assertSame(0, $data['purged']);
+        self::assertSame(0, $data['purged_paths']);
     }
 
     public function testIgnoreRejectsANonStringPattern(): void

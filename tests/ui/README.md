@@ -67,15 +67,19 @@ Rules for new tests: no `waitForTimeout`, arrange state through the API, verify 
 
 ## Accessibility (`a11y.spec.ts`)
 
-axe-core over every screen in both themes (rules with filter panel and selection, editor for a new and an existing rule, 404 monitor, suggestions, tester, import, export, settings, dashboard widget), WCAG 2.0 to 2.2 A/AA plus best practices. `serious` and `critical` violations fail. The scan covers the plugin's own element only. On the settings screen Admin 2's blueprint renderer (`grav-blueprint-form`) is excluded: its list fields and one select have no accessible names, which the plugin cannot fix. One known finding is filtered by its colours (`isKnownChainContrast` in the spec): the hop list of a chain warning in the editor has contrast 4.25 instead of 4.5 in the light theme (`.chain` in `admin2/src/editor/IssueList.svelte`, muted grey on the warning background). Fix the colour, then delete the filter.
+axe-core over every screen in both themes (rules with filter panel and selection, editor for a new and an existing rule, 404 monitor, suggestions, tester, import, export, settings, dashboard widget), WCAG 2.0 to 2.2 A/AA plus best practices. `serious` and `critical` violations fail. The scan covers the plugin's own element only. On the settings screen Admin 2's blueprint renderer (`grav-blueprint-form`) is excluded: its list fields and one select have no accessible names, which the plugin cannot fix.
 
-## Known product findings (tests are written against current behaviour, `test.fixme` where noted)
+The chain-warning contrast finding (4.25 instead of 4.5) is fixed (`.chain` uses `--rm-muted-fg`), the scan has no filter any more.
 
-- Focus is not returned to the trigger after the editor closes (2 `fixme` in keyboard.spec.ts).
-- The editor preview shows "Checking..." for good when the API answers `preview.result: null` (sample does not match, e.g. exact source `/blog/*`); the type says null means no match.
-- 404 monitor "Create redirect" for case-only suggestions (`/shop/Zelte`) fails with 422 `self_redirect`; Accept creates a case-sensitive rule and works.
-- The dashboard widget is broken for non-super users: `onApiDashboardWidgets()` passes an array as `authorize`, the API plugin expects a string (1 `fixme` in widget.spec.ts).
-- The "paths removed" toast after Ignore counts log entries, not paths.
+## Product findings the suite made (all fixed, kept as a record)
+
+- Focus was not returned to the trigger after the editor closed. Fixed in `Slideover.svelte` (the list behind was still `inert` when the focus call ran; `keyboard.spec.ts`).
+- The editor preview showed "Checking..." for good when the API answered `preview.result: null`. It shows "No match" with the reason now (`editor-validation.spec.ts`).
+- 404 monitor "Create redirect" for case-only suggestions (`/shop/Zelte`) failed with 422 `self_redirect`. The editor prefill sets `case_sensitive`, the error says "differs only in letter case" and offers a one-click fix (`monitor-404.spec.ts`, `editor-validation.spec.ts`).
+- The dashboard widget was broken for non-super users: `authorize` was an array, the API plugin's dashboard code needs a string (`widget.spec.ts`, `ApiSystemTest::testDashboardWidgetsFollowThePermission`).
+- The toast after Ignore counted log entries, not paths. `POST /redirects/404/ignore` answers `purged_paths` besides `purged` now, the toast uses the paths (`monitor-404.spec.ts`).
+- Wrong UI text `IMPORTEXPORT.SITE_TEXT` (Grav's `site.redirects` do not run before the plugin; they run only when no plugin rule matched and no routable page exists).
+- Open, upstream: Admin 2's own confirm and form dialogs have no `role="dialog"` (`docs/GRAV2-NOTES.md`, Appendix B); `hostDialog()` finds them by heading.
 
 ## Debugging
 

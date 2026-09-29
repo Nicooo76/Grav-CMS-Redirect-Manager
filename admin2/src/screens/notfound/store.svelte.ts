@@ -231,8 +231,9 @@ class NotFoundStore {
     if (!pattern) return;
     const { restore, removed } = this.#removeWhere((r) => globMatch(pattern, r.path));
     try {
-      const { data } = await api.post<{ pattern: string; patterns: string[]; purged: number }>('/redirects/404/ignore', { pattern, purge: true });
-      toast.success(t('NOTFOUND.IGNORED', { pattern, n: typeof data?.purged === 'number' ? data.purged : removed }));
+      const { data } = await api.post<{ pattern: string; patterns: string[]; purged: number; purged_paths?: number }>('/redirects/404/ignore', { pattern, purge: true });
+      // paths, like the rows of the list; `purged` counts log entries (one per logged request)
+      toast.success(t('NOTFOUND.IGNORED', { pattern, n: typeof data?.purged_paths === 'number' ? data.purged_paths : removed }));
     } catch (e) {
       restore();
       toast.error(describeError(e));

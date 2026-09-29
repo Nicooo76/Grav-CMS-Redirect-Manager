@@ -11,8 +11,10 @@
     issues: Issue[];
     onshorten?: (target: string) => void;
     onopen?: (id: string) => void;
+    /** one-click fix of a self redirect that differs only in letter case */
+    onfixcase?: () => void;
   }
-  let { issues, onshorten, onopen }: Props = $props();
+  let { issues, onshorten, onopen, onfixcase }: Props = $props();
 
   const iconFor = (s: string) => (s === 'error' ? CircleAlert : s === 'warning' ? TriangleAlert : Info);
   const cls = (s: string) => (s === 'error' ? 'bad' : s === 'warning' ? 'warn' : '');
@@ -62,6 +64,11 @@
               <Button size="sm" onclick={() => onshorten?.(issue.params!.shortcut as string)}>{t('EDITOR.SHORTEN', { target: issue.params!.shortcut as string })}</Button>
             </div>
           {/if}
+          {#if issue.code === 'self_redirect' && issue.params?.case_only && onfixcase}
+            <div style="margin-block-start:0.375rem">
+              <Button size="sm" onclick={() => onfixcase?.()}>{t('EDITOR.FIX_CASE')}</Button>
+            </div>
+          {/if}
           {#if onopen}
             {#each relatedIds(issue) as other (other)}
               <div style="margin-block-start:0.375rem">
@@ -82,7 +89,8 @@
     align-items: center;
     gap: 0.25rem;
     margin-block-start: 0.25rem;
-    color: var(--muted-foreground);
+    /* --rm-muted-fg is the muted grey pulled toward the text colour: 4.5:1 on the tinted warning background too */
+    color: var(--rm-muted-fg);
   }
   :global([dir='rtl']) .chain :global(.flip-rtl) {
     transform: scaleX(-1);

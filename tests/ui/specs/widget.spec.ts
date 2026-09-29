@@ -98,12 +98,9 @@ test.describe('dashboard widget (admin)', () => {
 test.describe('dashboard widget (read-only user)', () => {
   test.use({ asUser: 'readonly' });
 
-  // Product bug: onApiDashboardWidgets() in redirect-manager.php declares 'authorize' as an array
-  // (['admin.super', 'api.super', 'api.redirects.read']). Sidebar items accept that, but the API plugin's
-  // DashboardLayoutResolver passes the value to PermissionResolver::resolve(string) for every non-super user:
-  // GET /dashboard/widgets answers 500 and the dashboard of this user is empty. Fix: a string,
-  // 'api.redirects.read' (super users skip the check anyway). Remove the fixme when that is fixed.
-  test.fixme('renders the same numbers, the links still work', async ({ page, site, api, app }) => {
+  // The widget declares `authorize: 'api.redirects.read'`: the API plugin's DashboardLayoutResolver hands the value to
+  // PermissionResolver::resolve(string) for every user who is not a super admin (an array gave 500 and an empty dashboard).
+  test('renders the same numbers, the links still work', async ({ page, site, api, app }) => {
     const stats = await openDashboard(page, site.baseUrl);
     await expectDashboardNumbers(page, stats, api);
 

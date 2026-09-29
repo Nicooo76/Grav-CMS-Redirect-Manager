@@ -663,7 +663,7 @@ paths:
             example: {pattern: /wp-*, purge: true}
       responses:
         '200':
-          description: The pattern, the full ignore list and the number of purged entries.
+          description: The pattern, the full ignore list and the number of purged entries and paths.
           content:
             application/json:
               schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/IgnoreResult'}}}
@@ -2196,14 +2196,21 @@ components:
         days: {$ref: '#/components/schemas/DayCounts'}
     IgnoreResult:
       type: object
-      required: [pattern, patterns, purged]
+      required: [pattern, patterns, purged, purged_paths]
       properties:
         pattern: {type: string}
         patterns:
           type: array
           description: The whole ignore list after the change.
           items: {type: string}
-        purged: {type: integer, minimum: 0}
+        purged:
+          type: integer
+          minimum: 0
+          description: Deleted log entries (one per logged request). 0 without `purge`.
+        purged_paths:
+          type: integer
+          minimum: 0
+          description: Distinct paths those entries belonged to, the rows the 404 monitor listed. 0 without `purge`.
 
     # ------------------------------------------------------------------ suggestions
     SuggestionReason:

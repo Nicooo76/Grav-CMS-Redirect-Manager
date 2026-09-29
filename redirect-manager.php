@@ -567,7 +567,9 @@ class RedirectManagerPlugin extends Plugin
             'icon' => 'Route',
             'sizes' => ['sm', 'md', 'lg'],
             'defaultSize' => 'md',
-            'authorize' => ['admin.super', 'api.super', 'api.redirects.read'],
+            // A string: DashboardLayoutResolver hands it to PermissionResolver::resolve(string) for every user
+            // who is not a super admin (super admins skip the check). An array would end in a 500 for them.
+            'authorize' => 'api.redirects.read',
             'priority' => 40,
             'scriptUrl' => '/gpm/plugins/' . self::SLUG . '/widget-script',
             'dataEndpoint' => '/redirects/stats',

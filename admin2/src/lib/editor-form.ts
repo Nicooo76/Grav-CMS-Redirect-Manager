@@ -1,5 +1,5 @@
 /** Pure helpers for the rule editor form (payloads, dirty check, quick client checks). */
-import { blankRule, clone } from './rule-utils';
+import { blankRule, clone, differsOnlyInCase, isSitePath } from './rule-utils';
 import type { Condition, Issue, Rule, RuleInput, StatusCode } from './types';
 
 export type RuleForm = ReturnType<typeof blankRule>;
@@ -16,7 +16,13 @@ export function initialForm(rule: Rule | null, prefill: RuleInput = {}, defaultS
     const { id: _id, stats: _s, badges: _b, issues: _i, created_at: _c, updated_at: _u, ...rest } = rule;
     return { ...blankRule(), ...clone(rest) } as RuleForm;
   }
-  return blankRule({ status: defaultStatus as StatusCode, ...clone(prefill) });
+  const form = blankRule({ status: defaultStatus as StatusCode, ...clone(prefill) });
+  // A prefilled source and target that differ only in case (404 suggestion /shop/Zelte to /shop/zelte) would be
+  // refused as self_redirect by a case-insensitive rule, unless the caller decided otherwise.
+  if (prefill.case_sensitive === undefined && form.match_type === 'exact' && isSitePath(form.target) && differsOnlyInCase(form.source, form.target)) {
+    form.case_sensitive = true;
+  }
+  return form;
 }
 
 /** Trims text fields and drops empty rows so the payload is what the API should store. */

@@ -64,7 +64,8 @@
   let issues = $state<Issue[]>([]);
   let sample = $state('');
   let sampleTouched = $state(false);
-  let pv = $state<{ loading: boolean; result: PreviewResult['result'] | null; unavailable: boolean }>({ loading: false, result: null, unavailable: false });
+  /** `answered`: the API sent a preview for the sample; its `result` is null when no rule matches the sample at all. */
+  let pv = $state<{ loading: boolean; result: PreviewResult['result'] | null; answered: boolean; unavailable: boolean }>({ loading: false, result: null, answered: false, unavailable: false });
   let groupNames = $state<string[]>([]);
   let tagNames = $state<string[]>([]);
   let open = $state({ query: false, conditions: false, behaviour: false, schedule: false, organise: false });
@@ -95,7 +96,7 @@
     serverErrors = {};
     touched = false;
     issues = [];
-    pv = { loading: false, result: null, unavailable: false };
+    pv = { loading: false, result: null, answered: false, unavailable: false };
     sampleTouched = false;
     if (r.id) {
       loading = true;
@@ -162,7 +163,7 @@
     if (!payload.source) {
       vCtl?.abort();
       issues = [];
-      pv = { loading: false, result: null, unavailable: false };
+      pv = { loading: false, result: null, answered: false, unavailable: false };
       return;
     }
     pv.loading = true;
@@ -176,14 +177,14 @@
     try {
       const { data } = await api.post<{ issues: Issue[]; preview?: PreviewResult | null }>('/redirects/rules/validate', { ...payload, ...(id ? { id } : {}), ...(smp ? { sample: smp } : {}) }, { signal: ctl.signal });
       issues = data.issues ?? [];
-      pv = { loading: false, result: data.preview?.result ?? null, unavailable: false };
+      pv = { loading: false, result: data.preview?.result ?? null, answered: !!data.preview, unavailable: false };
     } catch (e) {
       if (isAbort(e)) return;
       if (e instanceof ApiError && e.status === 422 && e.errors.length) {
         issues = e.errors.map((x) => ({ code: x.code, severity: x.severity, message: x.message, field: x.field, params: x.params }) as Issue);
-        pv = { loading: false, result: null, unavailable: false };
+        pv = { loading: false, result: null, answered: false, unavailable: false };
       } else {
-        pv = { loading: false, result: null, unavailable: true };
+        pv = { loading: false, result: null, answered: false, unavailable: true };
       }
     }
   }
@@ -294,6 +295,12 @@
     closeEditor();
     await rules.remove([id]);
     bump('rules');
+  }
+
+  /** One-click fix of the self_redirect that differs only in letter case. */
+  function fixCase() {
+    form.case_sensitive = true;
+    open.behaviour = true;
   }
 
   function openOther(id: string) {
@@ -413,11 +420,12 @@
           hasSource={!!form.source.trim()}
           loading={pv.loading}
           result={pv.result}
+          answered={pv.answered}
           unavailable={pv.unavailable}
           ontouch={() => (sampleTouched = true)}
         />
 
-        <IssueList {issues} onshorten={(target) => { form.target = target; form.target_type = 'route'; }} onopen={openOther} />
+        <IssueList {issues} onshorten={(target) => { form.target = target; form.target_type = 'route'; }} onopen={openOther} onfixcase={fixCase} />
 
         {#if needTarget}
           <TargetField bind:form invalid={invalidFields.has('target')} error={fieldError.target ?? null} {candidates} />

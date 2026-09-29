@@ -28,6 +28,17 @@ describe('editor form', () => {
     expect(isDirty(a, b)).toBe(true);
   });
 
+  it('a prefill whose source and target differ only in case becomes case-sensitive (404 suggestion /shop/Zelte)', () => {
+    const f = initialForm(null, { source: '/shop/Zelte', target: '/shop/zelte', match_type: 'exact' });
+    expect(f.case_sensitive).toBe(true);
+    // the caller's own choice wins, other targets and match types are left alone
+    expect(initialForm(null, { source: '/shop/Zelte', target: '/shop/zelte', case_sensitive: false }).case_sensitive).toBe(false);
+    expect(initialForm(null, { source: '/shop/Zelte', target: '/shop/zelt' }).case_sensitive).toBe(false);
+    expect(initialForm(null, { source: '/shop/zelte', target: '/shop/zelte' }).case_sensitive).toBe(false);
+    expect(initialForm(null, { source: '/shop/Zelte', target: 'https://example.org/shop/zelte' }).case_sensitive).toBe(false);
+    expect(initialForm(null, { source: '/shop/*', target: '/shop/zelte', match_type: 'wildcard' }).case_sensitive).toBe(false);
+  });
+
   it('builds a clean payload', () => {
     const f = initialForm(stored());
     f.source = ' /a ';

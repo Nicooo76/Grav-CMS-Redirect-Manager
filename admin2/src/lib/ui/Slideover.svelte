@@ -22,7 +22,10 @@
   let mounted = $state(false);
   let closing = $state(false);
   let panel: HTMLElement | undefined = $state();
+  /** Real focus owner when the panel opened (deep: `document.activeElement` is only the shadow host). */
   let opener: HTMLElement | null = null;
+  /** The element made inert while the panel is open. */
+  let background: HTMLElement | null = null;
   const titleId = uniqueId('so-title');
   let closeTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -45,8 +48,20 @@
   function finish() {
     mounted = false;
     closing = false;
-    if (opener && opener.isConnected) opener.focus({ preventScroll: true });
+    // The effect below clears `inert` only after this function, and focus() does nothing on an inert element:
+    // release the page behind the panel first.
+    if (background) background.inert = false;
+    const back = opener;
     opener = null;
+    if (back && back.isConnected) {
+      back.focus({ preventScroll: true });
+      // A host dialog (confirm, form) that was open a moment ago restores its own idea of the focus in the next
+      // frame; take it back when that left the focus nowhere.
+      requestAnimationFrame(() => {
+        const now = deepActive();
+        if (back.isConnected && now !== back && (!now || now === document.body || !!now.shadowRoot)) back.focus({ preventScroll: true });
+      });
+    }
     onclosed?.();
   }
 
@@ -55,11 +70,13 @@
     if (!mounted || !panel) return;
     const root = panel.getRootNode() as ShadowRoot | Document;
     const bg = inertSelector ? (root.querySelector(inertSelector) as HTMLElement | null) : null;
+    background = bg;
     if (bg) bg.inert = true;
     const first = panel.querySelector<HTMLElement>('[data-autofocus]') ?? focusables(panel.querySelector('.so-body') as HTMLElement)[0] ?? panel;
     requestAnimationFrame(() => first.focus({ preventScroll: true }));
     return () => {
       if (bg) bg.inert = false;
+      if (background === bg) background = null;
     };
   });
 

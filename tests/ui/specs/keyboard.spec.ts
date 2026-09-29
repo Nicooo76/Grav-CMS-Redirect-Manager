@@ -219,10 +219,9 @@ test.describe('keyboard shortcuts', () => {
     await expect.poll(() => app.editor.evaluate((el) => el.contains((el.getRootNode() as ShadowRoot).activeElement))).toBe(true);
   });
 
-  // BUG (product): the focus is not given back. Slideover.finish() calls opener.focus() while the list behind is still
-  // `inert` (the effect that clears it runs after finish()), so the call does nothing and the focus falls to <body>.
-  // Check: after Esc, document.activeElement is BODY. Remove the fixme once Slideover restores the focus.
-  test.fixme('focus returns to the row link after the editor closes', async ({ app, page }) => {
+  // The page lives in a shadow root, so `document.activeElement` is the host; Slideover keeps the deep active element
+  // and gives it back after the close, once the list behind is no longer `inert`.
+  test('focus returns to the row link after the editor closes', async ({ app, page }) => {
     await app.goto('#/rules');
     const link = app.row('/a-zelte').getByRole('link', { name: '/a-zelte', exact: true });
     await link.click();
@@ -233,8 +232,7 @@ test.describe('keyboard shortcuts', () => {
     await expect(page).toHaveURL(/#\/rules$/);
   });
 
-  // BUG (product): same cause as above.
-  test.fixme('focus returns to the New redirect button after Cancel, Esc and Discard', async ({ app, page }) => {
+  test('focus returns to the New redirect button after Cancel, Esc and Discard', async ({ app, page }) => {
     await app.goto('#/rules');
     await newButton(app).click();
     await expect(app.field('Source')).toBeFocused();

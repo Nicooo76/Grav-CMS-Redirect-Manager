@@ -117,6 +117,24 @@ final class ApiSystemTest extends ApiTestCase
         self::assertStringStartsNotWith('PLUGIN_REDIRECT_MANAGER', (string) $sidebar['redirect-manager']['label'], 'the API plugin translates sidebar labels');
     }
 
+    public function testDashboardWidgetsFollowThePermission(): void
+    {
+        // The API plugin passes a widget's `authorize` to PermissionResolver::resolve(string) for every user who is not
+        // a super admin; an array there made the whole endpoint answer 500 (and the dashboard empty).
+        $reader = $this->reader->get('/dashboard/widgets');
+        self::assertSame(200, $reader->status, $reader->describe());
+        $ids = array_column((array) ($reader->data()['widgets'] ?? []), 'id');
+        self::assertContains('redirect-manager.overview', $ids, 'api.access + api.redirects.read sees the widget');
+
+        $basic = $this->basic->get('/dashboard/widgets');
+        self::assertSame(200, $basic->status, $basic->describe());
+        $ids = array_column((array) ($basic->data()['widgets'] ?? []), 'id');
+        self::assertNotContains('redirect-manager.overview', $ids, 'no redirect permission: no widget, but the dashboard still loads');
+
+        $admin = $this->api->get('/dashboard/widgets');
+        self::assertContains('redirect-manager.overview', array_column((array) ($admin->data()['widgets'] ?? []), 'id'), 'super admin');
+    }
+
     public function testStatsCountHitsAnd404sAndRules(): void
     {
         $this->rules([

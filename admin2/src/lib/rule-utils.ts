@@ -40,3 +40,15 @@ export function toInput(rule: Rule): RuleInput {
   const { id: _id, stats: _s, badges: _b, issues: _i, created_at: _c, updated_at: _u, ...rest } = rule;
   return clone(rest) as RuleInput;
 }
+
+/**
+ * True when two paths are not identical but equal ignoring case (/shop/Zelte and /shop/zelte). A case-insensitive
+ * rule with such a target matches its own target (a loop the API refuses with self_redirect), so a rule built from
+ * a suggestion has to be case-sensitive. Same test as PathNormalizer::differsOnlyInCase() in the plugin.
+ */
+export function differsOnlyInCase(a: string, b: string): boolean {
+  return a !== b && a.toLowerCase() === b.toLowerCase();
+}
+
+/** Target that is a path of this site (not a full URL): the only kind that can point back at the source. */
+export const isSitePath = (target: string): boolean => !/^[a-z][a-z0-9+.-]*:\/\//i.test(target);

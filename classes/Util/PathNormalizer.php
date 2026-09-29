@@ -72,6 +72,16 @@ final class PathNormalizer
     }
 
     /**
+     * True when two paths are not identical but equal ignoring case (/shop/Zelte and /shop/zelte). A
+     * case-insensitive rule with such a target matches its own target, which is a loop; the rule has to be
+     * case-sensitive.
+     */
+    public static function differsOnlyInCase(string $a, string $b): bool
+    {
+        return $a !== $b && self::lower($a) === self::lower($b);
+    }
+
+    /**
      * Splits a rule source into path and query string (without "?").
      *
      * @return array{0: string, 1: string}

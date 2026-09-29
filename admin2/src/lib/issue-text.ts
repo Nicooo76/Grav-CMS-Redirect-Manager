@@ -44,6 +44,9 @@ export function validationText(issue: CodedIssue): string {
     const tail = typeof p.shortcut === 'string' && p.shortcut ? tHost(VALIDATION_PREFIX + 'CHAIN_SHORTCUT', textParams(p)) : undefined;
     return tail ? `${head} ${tail}` : head;
   }
+  if (issue.code === 'self_redirect' && issue.params?.case_only) {
+    return tHost(VALIDATION_PREFIX + 'SELF_REDIRECT_CASE', textParams(issue.params)) ?? issue.message;
+  }
   return translate(VALIDATION_PREFIX, issue);
 }
 

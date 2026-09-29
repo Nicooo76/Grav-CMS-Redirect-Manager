@@ -129,7 +129,7 @@ const en: Record<string, string> = {
   'IMPORTEXPORT.EXPORT_SKIPPED_MORE': '… and {n} more.',
 
   'IMPORTEXPORT.SITE_TITLE': 'Grav site configuration',
-  'IMPORTEXPORT.SITE_TEXT': 'Grav applies site.redirects and site.routes from user/config/site.yaml by itself, before this plugin runs. Copy them into Redirect Manager to test, count and manage them here. Your site.yaml stays as it is.',
+  'IMPORTEXPORT.SITE_TEXT': 'This plugin matches first, at the start of the request. Grav applies site.redirects and site.routes from user/config/site.yaml only when no rule here matched and no routable page exists for the URL. Copy them into Redirect Manager to test, count and manage them here. Your site.yaml stays as it is.',
   'IMPORTEXPORT.SITE_IMPORT': 'Import into Redirect Manager',
   'IMPORTEXPORT.SITE_IMPORTED': '{created} imported, {skipped} skipped because they already exist.',
   'IMPORTEXPORT.SITE_ENTRIES': '{n, plural, one {# entry} other {# entries}}',

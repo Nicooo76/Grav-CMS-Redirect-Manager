@@ -414,6 +414,7 @@ final class NotFoundServiceTest extends AppTestCase
         self::assertSame('/Scanner/*', $first['pattern']);
         self::assertSame(['/existing/*', '/Scanner/*'], $first['patterns']);
         self::assertSame(0, $first['purged']);
+        self::assertSame(0, $first['purged_paths']);
         self::assertSame(['/existing/*', '/Scanner/*'], $again['patterns'], 'case-insensitive duplicate is not added twice');
         self::assertSame(['/existing/*', '/Scanner/*'], $this->configWriter->patterns);
     }
@@ -428,7 +429,8 @@ final class NotFoundServiceTest extends AppTestCase
 
         $result = $this->service()->ignore('/scan/*', true);
 
-        self::assertSame(4, $result['purged']);
+        self::assertSame(4, $result['purged'], 'log entries: two hits of /scan/a, one of /scan/b, one bot hit');
+        self::assertSame(3, $result['purged_paths'], 'distinct paths, what the monitor lists');
         self::assertSame(['/keep'], $this->paths(['days' => '366', 'bots' => '1']));
         self::assertSame(['/scan/*'], $result['patterns']);
     }
@@ -454,6 +456,7 @@ final class NotFoundServiceTest extends AppTestCase
         $result = $this->service()->ignore('/junk/*', true);
 
         self::assertSame(520, $result['purged']);
+        self::assertSame(520, $result['purged_paths']);
         self::assertSame(['/keep'], $this->paths());
     }
 

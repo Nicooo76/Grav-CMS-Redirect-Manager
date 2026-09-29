@@ -299,7 +299,7 @@ final class ApiNotFoundTest extends ApiTestCase
 
         $response = $this->api->post('/redirects/404/ignore', ['pattern' => '/missing/*']);
         self::assertSame(200, $response->status, $response->describe());
-        self::assertSame(['pattern' => '/missing/*', 'patterns' => ['/already/*', '/missing/*'], 'purged' => 0], $response->data());
+        self::assertSame(['pattern' => '/missing/*', 'patterns' => ['/already/*', '/missing/*'], 'purged' => 0, 'purged_paths' => 0], $response->data());
         self::assertContains('/missing/one', $this->paths(), 'without purge the logged entries stay');
 
         $yaml = Yaml::parse((string) $this->site()->readFile('user/config/plugins/redirect-manager.yaml'));
@@ -330,7 +330,8 @@ final class ApiNotFoundTest extends ApiTestCase
 
         $response = $this->api->post('/redirects/404/ignore', ['pattern' => '/missing/*', 'purge' => true]);
         self::assertSame(200, $response->status, $response->describe());
-        self::assertSame(3, $response->data()['purged']);
+        self::assertSame(3, $response->data()['purged'], 'log entries (two hits of one path, one of the other)');
+        self::assertSame(2, $response->data()['purged_paths'], 'paths, what the monitor lists');
         self::assertSame(['/keep/me'], $this->paths());
         self::assertSame(['/keep/me'], array_column($this->site()->notFoundEntries(), 'p'));
         $yaml = Yaml::parse((string) $this->site()->readFile('user/config/plugins/redirect-manager.yaml'));

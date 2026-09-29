@@ -5,15 +5,6 @@ import type { App, Theme } from '../support/app';
 
 const THEMES: Theme[] = ['light', 'dark'];
 
-/**
- * Known finding (report it, then delete this filter): the hop list of a chain warning (`.chain`,
- * admin2/src/editor/IssueList.svelte) sets 11 px text in the muted grey (#71717a) on the warning background (#f4f0eb),
- * contrast 4.25 instead of 4.5. axe cannot exclude it by selector across the shadow root, so the scan drops exactly
- * these nodes (matched by colours) and keeps everything else.
- */
-const isKnownChainContrast = (node: { any: Array<{ message?: string }> }): boolean =>
-  node.any.some((c) => /foreground color: #71717a, background color: #f4f0eb, font size: 8\.3pt/.test(c.message ?? ''));
-
 /** WCAG 2.x A/AA plus axe's best practices; only `serious` and `critical` findings fail the test. */
 async function scan(page: Page, scope = 'grav-redirect-manager--page', exclude: Array<string | string[]> = []): Promise<string[]> {
   let builder = new AxeBuilder({ page }).include(scope);
@@ -23,8 +14,6 @@ async function scan(page: Page, scope = 'grav-redirect-manager--page', exclude: 
     .analyze();
   return results.violations
     .filter((v) => v.impact === 'serious' || v.impact === 'critical')
-    .map((v) => ({ ...v, nodes: v.id === 'color-contrast' ? v.nodes.filter((n) => !isKnownChainContrast(n)) : v.nodes }))
-    .filter((v) => v.nodes.length > 0)
     .map((v) => `${v.impact} ${v.id}: ${v.help} (${v.nodes.length}x) ${v.nodes.map((n) => `${n.target.join(' ')} [${(n.any[0]?.message ?? '').slice(0, 160)}]`).join(' | ')}`);
 }
 

@@ -86,7 +86,7 @@ jobs:
         run: composer unit
 
       - name: Integration tests
-        run: RM_PHP_BIN="$(which php)" composer integration
+        run: RM_PHP_BIN="$(which php)" RM_PERF_FACTOR=3 composer integration
 
   ui:
     name: Admin 2 bundles

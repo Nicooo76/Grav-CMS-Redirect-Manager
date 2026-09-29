@@ -29,6 +29,17 @@ final class ApiPerformanceTest extends ApiTestCase
     /** Budget of the other endpoints in milliseconds. */
     private const OTHER_LIMIT_MS = 300.0;
 
+    /**
+     * Budget scaled by RM_PERF_FACTOR (default 1). Shared CI runners are slower than a developer machine; the
+     * workflow sets a factor there, so the test still catches algorithmic regressions without failing on noise.
+     */
+    private static function limit(float $ms): float
+    {
+        $factor = (float) (getenv('RM_PERF_FACTOR') ?: 1);
+
+        return $ms * max(1.0, $factor);
+    }
+
     protected static function siteIni(): array
     {
         return ['opcache.enable' => '1', 'opcache.enable_cli' => '1', 'opcache.validate_timestamps' => '1', 'opcache.memory_consumption' => '128'];
@@ -165,8 +176,8 @@ final class ApiPerformanceTest extends ApiTestCase
         $this->seedStats();
 
         [$median, $fastest] = $this->measure('/redirects/rules', ['per_page' => '50']);
-        $this->report('GET /redirects/rules (page of 50)', $median, $fastest, self::LIST_LIMIT_MS);
-        self::assertLessThan(self::LIST_LIMIT_MS, $fastest, 'rule list, first page, default sort');
+        $this->report('GET /redirects/rules (page of 50)', $median, $fastest, self::limit(self::LIST_LIMIT_MS));
+        self::assertLessThan(self::limit(self::LIST_LIMIT_MS), $fastest, 'rule list, first page, default sort');
 
         $page = $this->api->get('/redirects/rules', ['per_page' => '50', 'page' => '3']);
         self::assertSame(200, $page->status);
@@ -177,8 +188,8 @@ final class ApiPerformanceTest extends ApiTestCase
             parse_str($query, $params);
             /** @var array<string, string> $params */
             [$median, $fastest] = $this->measure('/redirects/rules', ['per_page' => '50'] + $params);
-            $this->report('GET /redirects/rules ' . $label, $median, $fastest, self::LIST_LIMIT_MS);
-            self::assertLessThan(self::LIST_LIMIT_MS, $fastest, $label);
+            $this->report('GET /redirects/rules ' . $label, $median, $fastest, self::limit(self::LIST_LIMIT_MS));
+            self::assertLessThan(self::limit(self::LIST_LIMIT_MS), $fastest, $label);
         }
     }
 
@@ -200,8 +211,8 @@ final class ApiPerformanceTest extends ApiTestCase
         ];
         foreach ($cases as $label => [$path, $query]) {
             [$median, $fastest] = $this->measure($path, $query);
-            $this->report($label, $median, $fastest, self::OTHER_LIMIT_MS);
-            self::assertLessThan(self::OTHER_LIMIT_MS, $fastest, $label);
+            $this->report($label, $median, $fastest, self::limit(self::OTHER_LIMIT_MS));
+            self::assertLessThan(self::limit(self::OTHER_LIMIT_MS), $fastest, $label);
         }
 
         $groups = $this->api->get('/redirects/404', ['days' => '30']);

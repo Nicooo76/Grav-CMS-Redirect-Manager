@@ -548,10 +548,21 @@ PHP;
     {
         // Every notice, warning and deprecation goes to logs/server.log, never into a response body.
         $flags = ['-d', 'error_reporting=-1', '-d', 'display_errors=0', '-d', 'log_errors=1'];
+        $router = 'system/router.php';
         foreach ($this->ini as $key => $value) {
+            if ($key === 'auto_prepend_file') {
+                // PHP 8.3's built-in server does not run auto_prepend_file before a router script (8.4 does),
+                // so a small router of our own loads the file and hands over to Grav's router.
+                $router = 'rm-router.php';
+                file_put_contents(
+                    $this->dir . '/' . $router,
+                    "<?php\nrequire " . var_export($value, true) . ";\n\nreturn require __DIR__ . '/system/router.php';\n",
+                );
+                continue;
+            }
             array_push($flags, '-d', $key . '=' . $value);
         }
-        $command = self::phpCommand(...$flags, ...['-S', '127.0.0.1:' . $this->port, 'system/router.php']);
+        $command = self::phpCommand(...$flags, ...['-S', '127.0.0.1:' . $this->port, $router]);
         $process = proc_open(
             $command,
             [0 => ['file', '/dev/null', 'r'], 1 => ['file', $this->dir . '/logs/server.log', 'w'], 2 => ['file', $this->dir . '/logs/server.log', 'a']],

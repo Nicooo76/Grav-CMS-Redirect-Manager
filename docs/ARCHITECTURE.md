@@ -13,7 +13,7 @@ classes/
   Security/                 TargetGuard (open-redirect protection), RegexSafety. No Grav.
   Matching/                 RuleCompiler, CompiledRuleSet, Matcher, MatcherOptions, LocationEncoder. No Grav.
   Analysis/                 ChainAnalyzer, ConflictDetector, RuleValidator, ValidationIssue. No Grav.
-  Storage/                  RuleRepository (YAML), CompiledRuleCache (PHP file for OPcache), AtomicFile. No Grav.
+  Storage/                  RuleRepository (YAML), ParsedRulesCache (parsed rows by content hash), CompiledRuleCache (PHP file for OPcache), AtomicFile. No Grav.
   NotFound/                 NotFoundLogger, LogStore (JSONL + SQLite), UserAgentClassifier, IpAnonymizer, IgnoreList. No Grav.
   Stats/                    HitRecorder, StatsStore (daily aggregation, 90 days). No Grav.
   Suggest/                  PageIndex, Suggester, SitemapDiff, SuggestionStore. No Grav.
@@ -25,7 +25,7 @@ classes/
                             GravPageIndexBuilder (page tree of every supported language) + PageIndexCache, SchedulerJobs (job registration and entry points).
                             The plugin's event bodies: FrontendRedirectHandler (onPluginsLoaded, onPagesInitialized, onPageNotFound:
                             match, send, count hits, log 404s), TwigIntegration (template paths, redirect_for, sandbox policy),
-                            AdminIntegration (permissions, sidebar, page definition, widget, MCP tools), RouteRegistrar (all 40 REST routes,
+                            AdminIntegration (permissions, sidebar, page definition, widget, page-editor panel, MCP tools), RouteRegistrar (all 43 REST routes,
                             the single place they are registered; the integration tests loop over it), SchedulerJobs::onInitialized.
   Auto/                     Automatic redirects. Grav-free: PageSnapshot/PageNode, AutoRedirectPlanner (plan = rules to
                             create, update, delete, notes, pending decision), AutoRedirectApplier (runs a plan in
@@ -36,7 +36,7 @@ classes/
   Api/                      ApiController (extends the API plugin's AbstractApiController).
   Cli/                      CliCommands (shared logic for cli/*Command.php).
 cli/                        Symfony console commands for bin/plugin redirect-manager ...
-admin-next/                 Built Admin 2 bundles (committed): pages/redirect-manager.js, widgets/redirect-manager.js
+admin-next/                 Built Admin 2 bundles (committed): pages/, widgets/ and panels/redirect-manager.js
 admin2/                     Svelte + Vite source of the Admin 2 bundles
 templates/redirect-manager/ gone.html.twig, unavailable.html.twig
 tests/Unit, tests/Integration, tests/ui (Playwright)
@@ -68,6 +68,8 @@ Suggested `.gitignore` for Git Sync users: `hits/`, `404/`, `404.sqlite` (logs a
 The directory also carries an `.htaccess` (`Require all denied`, Apache 2.2 fallback `Deny from all`) and an empty `index.html`, written by `Storage/DataDirProtection` the first time a service that writes there is used (`ServiceFactory::protectDataDir()`). Existing files are never overwritten, so a changed `.htaccess` stays. Grav's own `.htaccess` and nginx samples already deny `user/data/` except media files; this is defence in depth (nginx ignores `.htaccess`). The read-only matching path does not touch the directory.
 
 The compiled rule set lives in `cache://redirect-manager/rules-<hash>.php` (plain `return [...]` array, OPcache friendly). It stores mtime, size, inode and ctime of `rules.yaml`; one `stat()` per request detects changes, including those pulled in by Git Sync (a file replaced by `rename()` gets a new inode and ctime; a file modified within the last two seconds is also compared by content hash). Multisite: the data and cache directories follow Grav's `user://` and `cache://` streams, so every site of a `setup.php` multisite installation has its own rules, logs and compiled cache. Clearing the Grav cache only forces a rebuild.
+
+The admin side reads the rules through a second cache, `cache://redirect-manager/parsed-rules-<hash>.php`: the normalized rows of `rules.yaml` (default values omitted, values in the types the plugin writes) keyed by the SHA-1 of the file content, written by `Storage/ParsedRulesCache`. Parsing 10,000 rules with Symfony YAML takes 0.75 s, the cache read 25 ms. The key is the content hash, so a hand edit or a Git Sync pull can never be answered with old rows; every save of `RuleRepository` writes its rows through, and `CompiledRuleCache` reads the same file when it rebuilds. A missing, truncated or unwritable cache file means "parse the YAML". `RuleRepository::snapshot()` returns rules and revision from one read, `snapshotRows()` the rows without `Rule` objects (the dashboard counts from them). `RuleService` also caches the chain analysis per revision (`analysis-<revision>.php`), and `StatsStore::all()` keeps its decoded result while `stats.json` is unchanged. Rule ids are made by `Util\Ids` (time, a per-millisecond counter and random bits), which never repeats an id within a process. Numbers: `docs/PERFORMANCE.md`.
 
 ## Rule model
 

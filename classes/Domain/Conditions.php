@@ -36,6 +36,9 @@ final readonly class Conditions
      */
     public static function fromArray(array $data): self
     {
+        if ($data === []) {
+            return new self();
+        }
         $rules = [];
         foreach (is_array($data['rules'] ?? null) ? $data['rules'] : [] as $rule) {
             if (is_array($rule)) {

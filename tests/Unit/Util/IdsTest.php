@@ -19,16 +19,16 @@ use PHPUnit\Framework\TestCase;
 #[Group('util')]
 final class IdsTest extends TestCase
 {
-    public function testSortableIdHas11TimeCharsAnd6RandomChars(): void
+    public function testSortableIdHas11TimeChars3CounterCharsAnd8RandomChars(): void
     {
         $id = Ids::sortable();
 
-        self::assertMatchesRegularExpression('/^[0-9a-f]{17}$/', $id);
+        self::assertMatchesRegularExpression('/^[0-9a-f]{22}$/', $id);
     }
 
     public function testRuleIdIsPrefixedSortableId(): void
     {
-        self::assertMatchesRegularExpression('/^r[0-9a-f]{17}$/', Ids::rule());
+        self::assertMatchesRegularExpression('/^r[0-9a-f]{22}$/', Ids::rule());
     }
 
     public function testTimePartEncodesTheMillisecondsSinceTheEpoch(): void
@@ -59,7 +59,48 @@ final class IdsTest extends TestCase
             $ids[Ids::rule()] = true;
         }
 
-        self::assertGreaterThan(195, count($ids), 'the random suffix keeps ids unique');
+        self::assertCount(200, $ids, 'the per-millisecond counter keeps ids unique');
+    }
+
+    public function testAMillionIdsAreUniqueAndIncreasing(): void
+    {
+        $seen = [];
+        $previous = '';
+        for ($i = 0; $i < 1_000_000; $i++) {
+            $id = Ids::rule();
+            $seen[$id] = true;
+            if ($id <= $previous) {
+                self::fail(sprintf('id #%d (%s) does not sort after its predecessor (%s)', $i, $id, $previous));
+            }
+            $previous = $id;
+        }
+
+        self::assertCount(1_000_000, $seen);
+    }
+
+    public function testTheCounterRunsAheadOfTheClockInsteadOfRepeating(): void
+    {
+        // More ids than the counter holds per millisecond (4096) within one millisecond: the id clock moves on.
+        $first = Ids::sortable();
+        $last = $first;
+        for ($i = 0; $i < 10000; $i++) {
+            $last = Ids::sortable();
+        }
+
+        self::assertGreaterThan(0, strcmp($last, $first));
+        self::assertMatchesRegularExpression('/^[0-9a-f]{22}$/', $last);
+    }
+
+    public function testDifferentProcessesDoNotShareTheirRandomPart(): void
+    {
+        // The random tail differs between two ids with the same time and counter, which is what keeps two
+        // processes (two CLI runs, two requests) apart.
+        $tails = [];
+        for ($i = 0; $i < 500; $i++) {
+            $tails[substr(Ids::sortable(), 14)] = true;
+        }
+
+        self::assertGreaterThan(495, count($tails));
     }
 
     public function testFixedClockReturnsTheGivenTimeUntilItIsSet(): void

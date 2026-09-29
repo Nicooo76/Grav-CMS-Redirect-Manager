@@ -58,7 +58,7 @@ class RedirectManagerPlugin extends Plugin
         // The page-change events come from the API plugin (Admin 2, REST, MCP), never fire without it and share one method.
         foreach ([
             'onTwigInitialized', 'onBuildTwigSandboxPolicy', 'onSchedulerInitialized',
-            'onApiSidebarItems', 'onApiPluginPageInfo', 'onApiDashboardWidgets', 'onApiMcpTools',
+            'onApiSidebarItems', 'onApiPluginPageInfo', 'onApiDashboardWidgets', 'onApiContextPanels', 'onApiMcpTools',
         ] as $name) {
             $events[$name] = [$name, 0];
         }
@@ -122,6 +122,11 @@ class RedirectManagerPlugin extends Plugin
     public function onApiDashboardWidgets(Event $event): void
     {
         $this->admin()->dashboardWidgets($event);
+    }
+
+    public function onApiContextPanels(Event $event): void
+    {
+        $this->admin()->contextPanels($event);
     }
 
     public function onApiMcpTools(Event $event): void

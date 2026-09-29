@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
 use Grav\Plugin\RedirectManager\Util\Ids;
+use Grav\Plugin\RedirectManager\Util\Timestamps;
 
 /**
  * One redirect rule. Immutable; use with() to derive a changed copy.
@@ -178,6 +179,9 @@ final readonly class Rule
      */
     private static function strList(mixed $value): array
     {
+        if ($value === [] || $value === null || $value === '') {
+            return [];
+        }
         if (is_string($value)) {
             $value = preg_split('/\s*,\s*/', trim($value)) ?: [];
         }
@@ -199,6 +203,9 @@ final readonly class Rule
      */
     private static function queryParams(mixed $value): array
     {
+        if ($value === [] || $value === null || $value === '') {
+            return [];
+        }
         if (is_string($value)) {
             parse_str(ltrim($value, '?'), $parsed);
             $value = $parsed;
@@ -242,10 +249,6 @@ final readonly class Rule
         if (!is_string($value) || trim($value) === '') {
             return null;
         }
-        try {
-            return new DateTimeImmutable(trim($value));
-        } catch (\Exception) {
-            return null;
-        }
+        return Timestamps::parse(trim($value));
     }
 }

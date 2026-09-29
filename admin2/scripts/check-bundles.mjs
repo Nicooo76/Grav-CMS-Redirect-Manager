@@ -6,10 +6,10 @@ import { gzipSync } from 'node:zlib';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'admin-next');
 // Size budgets (raw bytes). The page bundle carries Svelte and the whole UI; the English strings come from the host dictionary.
-const budgets = { 'pages/redirect-manager.js': 440 * 1024, 'widgets/redirect-manager.js': 90 * 1024 };
+const budgets = { 'pages/redirect-manager.js': 440 * 1024, 'widgets/redirect-manager.js': 90 * 1024, 'panels/redirect-manager.js': 90 * 1024 };
 let failed = false;
 
-for (const dir of ['pages', 'widgets']) {
+for (const dir of ['pages', 'widgets', 'panels']) {
   const files = readdirSync(join(root, dir));
   if (files.length !== 1 || files[0] !== 'redirect-manager.js') {
     console.error(`FAIL ${dir}/ must contain exactly redirect-manager.js, found: ${files.join(', ')}`);

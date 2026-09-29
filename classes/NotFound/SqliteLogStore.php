@@ -94,6 +94,15 @@ final class SqliteLogStore implements LogStore
             return new GroupPage([], 0, new GroupTotals(0, 0, $zeroDays));
         }
 
+        if ($q->aggregatesOnly) {
+            $rows = [];
+            foreach ($plan->page as $path) {
+                $rows[] = (new GroupDetail())->toRow($path, $plan->visible[$path], $zeroDays);
+            }
+
+            return new GroupPage($rows, count($plan->visible), new GroupTotals($plan->hits, count($plan->visible), $zeroDays));
+        }
+
         $byDay = $zeroDays;
         $stmt = $this->pdo()->prepare(
             'SELECT path, day, COUNT(*) FROM log WHERE ' . $where . ' GROUP BY path, day',

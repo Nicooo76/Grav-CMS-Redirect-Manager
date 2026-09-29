@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Grav\Plugin\RedirectManager\Storage;
 
+use Grav\Plugin\RedirectManager\Domain\Rule;
 use Grav\Plugin\RedirectManager\Matching\CompiledRuleSet;
 use Grav\Plugin\RedirectManager\Matching\RuleCompiler;
 use InvalidArgumentException;
@@ -39,6 +40,7 @@ final class CompiledRuleCache
         private readonly string $rulesFile,
         private readonly RuleCompiler $compiler,
         private readonly ?LoggerInterface $logger = null,
+        private readonly ?ParsedRulesCache $parsed = null,
     ) {
     }
 
@@ -122,7 +124,7 @@ final class CompiledRuleCache
         $set = null;
         try {
             $content = AtomicFile::read($this->rulesFile);
-            $set = $this->compiler->compile(RuleRepository::parse($content, $this->rulesFile));
+            $set = $this->compiler->compile($this->parse($content));
         } catch (CorruptRulesFileException $e) {
             $error = $e->getMessage();
             $this->logger?->error('Redirect Manager: ' . $error . ' The previously compiled rules stay in force.');
@@ -153,10 +155,22 @@ final class CompiledRuleCache
         return $set;
     }
 
+    /**
+     * @return list<Rule>
+     *
+     * @throws CorruptRulesFileException
+     */
+    private function parse(?string $content): array
+    {
+        return $this->parsed === null
+            ? RuleRepository::parse($content, $this->rulesFile)
+            : RuleRepository::parseCached($content, $this->rulesFile, $this->parsed);
+    }
+
     private function compileOnly(): CompiledRuleSet
     {
         try {
-            return $this->compiler->compile(RuleRepository::parse(AtomicFile::read($this->rulesFile), $this->rulesFile));
+            return $this->compiler->compile($this->parse(AtomicFile::read($this->rulesFile)));
         } catch (Throwable $e) {
             $this->error = $e->getMessage();
             $this->logger?->error('Redirect Manager: ' . $e->getMessage());

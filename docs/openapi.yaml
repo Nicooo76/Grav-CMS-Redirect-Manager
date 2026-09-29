@@ -42,7 +42,7 @@ tags:
   - name: Pages
     description: Page search for the target picker.
   - name: Auto redirects
-    description: Decisions for deleted pages and the sidebar badge.
+    description: Decisions for deleted pages, the sidebar badge and the context panel of the page editor.
 
 paths:
   /redirects/rules:
@@ -220,7 +220,7 @@ paths:
         content:
           application/json:
             schema: {$ref: '#/components/schemas/BulkRequest'}
-            example: {action: set_group, ids: [r0192f3c1a2b4f1e2d3], value: Shop}
+            example: {action: set_group, ids: [r0192f3c1a2b00f8a3c91e7], value: Shop}
       responses:
         '200':
           description: Changed (or deleted) rules and skipped ids.
@@ -1360,6 +1360,136 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
 
+  /redirects/page-context:
+    get:
+      tags: [Auto redirects]
+      operationId: getPageContext
+      summary: What the rules say about one page
+      description: |
+        The data of the context panel in Admin 2's page editor, for one page route (no language prefix) and,
+        optionally, one language. Rules with a language condition that excludes `lang` are left out. `incoming` are
+        the rules that lead to the page (exact rules with the route as target, wildcard rules `old/*` to
+        `route/$1`), `created` the automatic rules for the page or below it that are unseen or under 24 hours old,
+        `outgoing` the rule that redirects the route away (the page cannot be reached), `pending` deleted
+        descendants that wait for a decision and `not_found` the 404 hits of the last 30 days on the old URLs of
+        the incoming rules (bots not counted). Lists are capped at 50 rows; the `*_total` fields count all. The
+        home page (`/`) only owns rules that point at `/` itself. `meta.permissions` says what the caller may do.
+        Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      parameters:
+        - name: route
+          in: query
+          required: true
+          description: 'Page route, starts with `/`, no query string, at most 2048 bytes. A trailing slash is ignored.'
+          schema: {type: string, example: /blog/news}
+        - name: lang
+          in: query
+          description: 'Language code, e.g. `de`. `language` is accepted as well. Empty or unknown values mean no language.'
+          schema: {type: string}
+      responses:
+        '200':
+          description: The page context.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: {$ref: '#/components/schemas/PageContext'}
+                  meta:
+                    type: object
+                    required: [permissions]
+                    properties:
+                      permissions:
+                        type: object
+                        required: [read, manage]
+                        properties:
+                          read: {type: boolean, description: 'Holds `api.redirects.read` (always true on this route).'}
+                          manage: {type: boolean, description: 'Holds `api.redirects.manage`: the panel offers the form and "Mark as seen".'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/page-context/badge:
+    get:
+      tags: [Auto redirects]
+      operationId: getPageContextBadge
+      summary: Toolbar badge of the page panel
+      description: |
+        Number of unseen automatic rules that point at the page or below it. It is the `badgeEndpoint` of the
+        context panel: Admin 2 calls it with `route`, `lang` and `type` when the page editor opens and after page
+        updates. `count` is `null` (not 0) when there is nothing to show. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      parameters:
+        - name: route
+          in: query
+          required: true
+          schema: {type: string, example: /blog/news}
+        - name: lang
+          in: query
+          schema: {type: string}
+        - name: type
+          in: query
+          description: 'Sent by Admin 2 (`pages`); ignored.'
+          schema: {type: string}
+      responses:
+        '200':
+          description: The count.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [count]
+                    properties:
+                      count: {type: [integer, 'null'], minimum: 1, description: 'Null when nothing is unseen for this page.'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/page-context/seen:
+    post:
+      tags: [Auto redirects]
+      operationId: markPageContextSeen
+      summary: Mark the automatic rules of one page as seen
+      description: |
+        Like `POST /redirects/badge/seen`, but only for the unseen automatic rules that point at the page or below
+        it; the ones of other pages stay unseen. The seen state is shared by all users, so it needs
+        `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [route]
+              properties:
+                route: {type: string, example: /blog/news}
+                lang: {type: string}
+      responses:
+        '200':
+          description: How many rules were marked, and the number the sidebar badge shows now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [cleared, count, sidebar]
+                    properties:
+                      cleared: {type: integer, minimum: 0}
+                      count: {type: 'null', description: 'Unseen rules left for the page: always none.'}
+                      sidebar: {type: [integer, 'null'], minimum: 1, description: 'Sidebar badge count after the change; null when it is empty.'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
 components:
   securitySchemes:
     apiKey:
@@ -1384,7 +1514,7 @@ components:
       in: path
       required: true
       description: Rule id.
-      schema: {type: string, examples: [r0192f3c1a2b4f1e2d3]}
+      schema: {type: string, examples: [r0192f3c1a2b00f8a3c91e7]}
     SuggestionId:
       name: id
       in: path
@@ -1752,7 +1882,7 @@ components:
           readOnly: true
           items: {$ref: '#/components/schemas/ValidationIssue'}
       examples:
-        - id: r0192f3c1a2b4f1e2d3
+        - id: r0192f3c1a2b00f8a3c91e7
           source: /old-page
           target: /new-page
           match_type: exact
@@ -2649,6 +2779,71 @@ components:
               kind: {type: string}
               source: {type: string}
               message: {type: string}
+    PageContextRule:
+      type: object
+      required: [id, source, target, match_type, status, target_type, origin, state, languages, note, created_at, unseen, recent, hits, last_hit]
+      properties:
+        id: {type: string}
+        source: {type: string}
+        target: {type: string}
+        match_type: {type: string, enum: [exact, wildcard, regex]}
+        status: {type: integer, enum: [200, 301, 302, 307, 308, 410, 451]}
+        target_type: {type: string, enum: [route, url, page]}
+        origin: {type: string, enum: [manual, import, auto, suggestion]}
+        state: {type: string, enum: [active, disabled, expired, scheduled]}
+        languages: {type: array, items: {type: string}, description: 'The rule''s language condition; empty for all languages.'}
+        note: {type: string}
+        created_at: {type: [string, 'null'], format: date-time}
+        unseen: {type: boolean, description: 'An automatic rule nobody has marked as seen.'}
+        recent: {type: boolean, description: 'Created in the last 24 hours.'}
+        hits: {type: integer, minimum: 0}
+        last_hit: {type: [string, 'null'], format: date-time}
+    PageContext:
+      type: object
+      required: [route, language, incoming, incoming_total, created, created_total, unseen, outgoing, pending, not_found, generated_at]
+      properties:
+        route: {type: string, description: 'The route as normalized (no trailing slash).'}
+        language: {type: [string, 'null']}
+        incoming: {type: array, maxItems: 50, items: {$ref: '#/components/schemas/PageContextRule'}}
+        incoming_total: {type: integer, minimum: 0}
+        created:
+          type: array
+          maxItems: 50
+          items: {$ref: '#/components/schemas/PageContextRule'}
+          description: 'Automatic rules for the page or below it that are unseen or under 24 hours old.'
+        created_total: {type: integer, minimum: 0}
+        unseen: {type: integer, minimum: 0, description: 'Unseen rules among `created`: the toolbar badge.'}
+        outgoing:
+          description: 'The rule that answers requests for the route with a redirect or 410/451 before the page is looked up.'
+          oneOf:
+            - type: 'null'
+            - allOf:
+                - $ref: '#/components/schemas/PageContextRule'
+                - type: object
+                  required: [location]
+                  properties:
+                    location: {type: string, description: 'Where the request is sent; empty for 410 and 451.'}
+        pending:
+          type: array
+          items:
+            type: object
+            required: [id, title, route, children_count, deleted_at]
+            properties:
+              id: {type: string}
+              title: {type: string}
+              route: {type: string}
+              children_count: {type: integer, minimum: 0}
+              deleted_at: {type: string, format: date-time}
+        not_found:
+          type: array
+          items:
+            type: object
+            required: [path, hits, last_seen]
+            properties:
+              path: {type: string}
+              hits: {type: integer, minimum: 1}
+              last_seen: {type: string, format: date-time}
+        generated_at: {type: string, format: date-time}
     Badge:
       type: object
       required: [count, unseen, pending]

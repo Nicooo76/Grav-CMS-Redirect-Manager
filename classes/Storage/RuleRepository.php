@@ -30,10 +30,13 @@ final class RuleRepository
     private const ALWAYS = ['id', 'source', 'target', 'match_type', 'status', 'enabled', 'priority'];
 
     /** @var array<string, mixed>|null */
-    private ?array $defaults = null;
+    private static ?array $defaults = null;
 
-    public function __construct(private readonly string $dataDir, private readonly Clock $clock)
-    {
+    public function __construct(
+        private readonly string $dataDir,
+        private readonly Clock $clock,
+        private readonly ?ParsedRulesCache $parsed = null,
+    ) {
     }
 
     public function file(): string
@@ -53,7 +56,99 @@ final class RuleRepository
      */
     public function all(): array
     {
-        return self::parse(AtomicFile::read($this->file()), $this->file());
+        return $this->snapshot()['rules'];
+    }
+
+    /**
+     * The rules and the hash of the file they were read from, in one consistent read. Rows come from the
+     * parsed-rules cache when it holds this exact content, so YAML is parsed only after a change made outside the plugin.
+     *
+     * @return array{rules: list<Rule>, revision: string}
+     *
+     * @throws CorruptRulesFileException
+     */
+    public function snapshot(): array
+    {
+        $content = AtomicFile::read($this->file());
+
+        return ['rules' => $this->parseContent($content), 'revision' => self::hashContent($content ?? '')];
+    }
+
+    /**
+     * Like parse(), through the parsed-rules cache.
+     *
+     * @return list<Rule>
+     *
+     * @throws CorruptRulesFileException
+     */
+    public function parseContent(?string $content): array
+    {
+        if ($content === null || trim($content) === '') {
+            return [];
+        }
+        if ($this->parsed === null) {
+            return self::parse($content, $this->file());
+        }
+
+        return self::parseCached($content, $this->file(), $this->parsed);
+    }
+
+    /**
+     * parse() that reads and fills $cache.
+     *
+     * @return list<Rule>
+     *
+     * @throws CorruptRulesFileException
+     */
+    public static function parseCached(?string $content, string $file, ParsedRulesCache $cache): array
+    {
+        if ($content === null || trim($content) === '') {
+            return [];
+        }
+
+        return self::hydrate(self::cachedRows($content, $file, $cache), $file);
+    }
+
+    /**
+     * The rules as normalized rows (the stored form: default values omitted, values in the types the plugin writes), and
+     * the hash of the file they were read from. For callers that only count or look up fields and do not need Rule
+     * objects: hydrating 10,000 rules costs about 50 ms, reading their rows about 25 ms.
+     *
+     * @return array{rows: list<array<string, mixed>>, revision: string}
+     *
+     * @throws CorruptRulesFileException
+     */
+    public function snapshotRows(): array
+    {
+        $content = AtomicFile::read($this->file());
+        if ($content === null || trim($content) === '') {
+            return ['rows' => [], 'revision' => self::hashContent($content ?? '')];
+        }
+        if ($this->parsed === null) {
+            return ['rows' => self::slimRows(self::parse($content, $this->file())), 'revision' => self::hashContent($content)];
+        }
+
+        return ['rows' => self::cachedRows($content, $this->file(), $this->parsed), 'revision' => self::hashContent($content)];
+    }
+
+    /**
+     * Rows of the cache for this content; on a miss the YAML is parsed, the rules are normalized (so a hand-edited
+     * `enabled: yes` is stored as `true`) and the rows are stored.
+     *
+     * @return list<array<string, mixed>>
+     *
+     * @throws CorruptRulesFileException
+     */
+    private static function cachedRows(string $content, string $file, ParsedRulesCache $cache): array
+    {
+        $hash = self::hashContent($content);
+        $rows = $cache->rows($hash);
+        if ($rows === null) {
+            $rows = self::slimRows(self::hydrate(self::rows($content, $file), $file));
+            $cache->store($hash, $rows);
+        }
+
+        return $rows;
     }
 
     public function find(string $id): ?Rule
@@ -99,7 +194,7 @@ final class RuleRepository
             }
             $old = [];
             try {
-                $old = self::parse($content, $this->file());
+                $old = $this->parseContent($content);
             } catch (CorruptRulesFileException) {
                 $this->backupCorrupt();
             }
@@ -228,11 +323,11 @@ final class RuleRepository
     {
         /** @var list<Rule> $result */
         $result = $this->locked(function () use ($fn, $restore): array {
-            $old = self::parse(AtomicFile::read($this->file()), $this->file());
+            $old = $this->parseContent(AtomicFile::read($this->file()));
             $new = array_values($fn($old));
             self::assertUniqueIds($new);
             $new = $restore ? $this->fillMissing($new) : $this->stamp($new, $old);
-            if (!is_file($this->file()) || $this->dump($new) !== $this->dump($old)) {
+            if (!is_file($this->file()) || self::slimRows($new) !== self::slimRows($old)) {
                 $this->write($new);
             }
 
@@ -254,6 +349,19 @@ final class RuleRepository
         if ($content === null || trim($content) === '') {
             return [];
         }
+
+        return self::hydrate(self::rows($content, $file), $file);
+    }
+
+    /**
+     * The YAML rows of a rules document, checked for shape.
+     *
+     * @return list<array<string, mixed>>
+     *
+     * @throws CorruptRulesFileException
+     */
+    private static function rows(string $content, string $file): array
+    {
         try {
             $data = Yaml::parse($content);
         } catch (ParseException $e) {
@@ -265,13 +373,30 @@ final class RuleRepository
         if (!is_array($data) || !array_key_exists('rules', $data) || !(is_array($data['rules']) || $data['rules'] === null)) {
             throw new CorruptRulesFileException($file, 'expected a map with a "rules" list.');
         }
-        $rules = [];
-        $seen = [];
+        $rows = [];
         foreach ($data['rules'] ?? [] as $i => $row) {
             if (!is_array($row)) {
                 throw new CorruptRulesFileException($file, sprintf('rule #%s is not a map.', (string) $i));
             }
             /** @var array<string, mixed> $row */
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     *
+     * @return list<Rule>
+     *
+     * @throws CorruptRulesFileException
+     */
+    private static function hydrate(array $rows, string $file): array
+    {
+        $rules = [];
+        $seen = [];
+        foreach ($rows as $row) {
             $rule = Rule::fromArray($row);
             if (isset($seen[$rule->id])) {
                 throw new CorruptRulesFileException($file, sprintf('duplicate rule id "%s".', $rule->id));
@@ -290,11 +415,14 @@ final class RuleRepository
      */
     public function dump(array $rules): string
     {
-        $rows = [];
-        foreach ($rules as $rule) {
-            $rows[] = $this->slim($rule);
-        }
+        return self::dumpRows(self::slimRows($rules));
+    }
 
+    /**
+     * @param list<array<string, mixed>> $rows
+     */
+    private static function dumpRows(array $rows): string
+    {
         $header = "# Redirect Manager rules. Edit here or in the admin; changes are picked up on the next request.\n";
 
         return $header . Yaml::dump(
@@ -307,11 +435,30 @@ final class RuleRepository
 
     /**
      * @param list<Rule> $rules
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function slimRows(array $rules): array
+    {
+        $rows = [];
+        foreach ($rules as $rule) {
+            $rows[] = self::slim($rule);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param list<Rule> $rules
      */
     private function write(array $rules): void
     {
-        AtomicFile::write($this->file(), $this->dump($rules));
+        $rows = self::slimRows($rules);
+        $content = self::dumpRows($rows);
+        AtomicFile::write($this->file(), $content);
         clearstatcache(true, $this->file());
+        // The next read finds these rows instead of parsing what was just written.
+        $this->parsed?->store(self::hashContent($content), $rows);
     }
 
     /**
@@ -426,12 +573,12 @@ final class RuleRepository
     /**
      * @return array<string, mixed>
      */
-    private function slim(Rule $rule): array
+    private static function slim(Rule $rule): array
     {
-        $this->defaults ??= (new Rule('', ''))->toArray();
+        $defaults = self::$defaults ??= (new Rule('', ''))->toArray();
         $row = [];
         foreach ($rule->toArray() as $key => $value) {
-            if (in_array($key, self::ALWAYS, true) || $value !== ($this->defaults[$key] ?? null)) {
+            if (in_array($key, self::ALWAYS, true) || $value !== ($defaults[$key] ?? null)) {
                 $row[$key] = $value;
             }
         }

@@ -20,7 +20,7 @@ Needs PHP 8.3 or newer with the extensions Grav needs (`RM_PHP_BIN` selects anot
 
 `global-setup.ts` builds a **fresh Grav site** in a temp directory for every run: `system/`, `vendor/`, `bin/` and the plugins are symlinked to the base site (`.grav/2.2.2`, made by `scripts/setup-test-site.sh`), `user/config`, `user/pages`, `user/accounts` and the theme are copied. Then it
 
-1. starts `php -S` on a free port from 8400 to 8499 (four PHP workers, `PHP_CLI_SERVER_WORKERS=4`),
+1. starts `php -S` on a free port from 8400 to 8499 (`RM_PORT_RANGE` changes the range) (four PHP workers, `PHP_CLI_SERVER_WORKERS=4`),
 2. creates two accounts with generated passwords: `rmadmin` (super admin) and `rmreader` (`api.access` + `api.redirects.read`). The passwords exist only in a `0600` JSON file in the temp directory (or in `RM_CREDENTIALS_FILE`),
 3. seeds the data: the rules come from `fixtures/seed-rules.json` through `bin/plugin redirect-manager import`, plus one loop rule (hand-written into `rules.yaml`, the importer refuses loops) and one conflicting rule (API). Hits and 404 entries are real HTTP requests with fixed paths and user agents (`support/seed.ts`). `bin/grav scheduler --run=redirect-manager-maintenance` folds the hits into the statistics, `bin/plugin redirect-manager suggest --no-accept` generates suggestions,
 4. logs in through the Admin 2 login form once per account and saves the browser state (`auth-admin.json`, `auth-readonly.json`),
@@ -37,7 +37,8 @@ The tests run with one worker: they change the state of one shared site.
 | `RM_SITE_DIR` | `<repo>/.grav/2.2.2` | Base Grav site that is copied for the run. It is never modified. |
 | `RM_GRAV_VERSION` | `2.2.2` | Version folder under `.grav/`. |
 | `RM_PHP_BIN` | `php` | PHP binary for the server and the CLI calls. |
-| `RM_PORT` | random in 8400-8499 | Fixed port for the test server. |
+| `RM_PORT` | random in the range | Fixed port for the test server. |
+| `RM_PORT_RANGE` | `8400-8499` | Range the random port is taken from, e.g. `8600-8699`. |
 | `RM_PHP_WORKERS` | `4` | `PHP_CLI_SERVER_WORKERS` of the test server. |
 | `RM_CREDENTIALS_FILE` | temp directory | Where the generated passwords are written (mode 0600, removed at the end). |
 | `RM_KEEP_SITE` | unset | `1`: keep the temp site after the run (the server is stopped), for looking at logs and data. |
@@ -52,6 +53,7 @@ The tests run with one worker: they change the state of one shared site.
 
 | Spec | What it drives |
 |---|---|
+| `page-panel` | the Redirects context panel of Admin 2's page editor: toolbar button and badge, the lists, "Mark as seen", the warning for a page that is redirected away, adding an old URL (checked while typing, 301 on the public site), "Open in Redirect Manager", axe in light and dark. `RM_SHOTS=1 npx playwright test page-panel -g screenshot` rewrites `docs/screenshots/page-panel-*.png` |
 | `admin2-page-editor` | Admin 2's own page editor (folder name, Delete Page) and what the plugin does with it: unseen panel, sidebar badge, 301 on the public site, pending panel |
 | `german` | the admin user's language is German: every tab, the editor, the pending panel and the widget; no raw keys, English fallbacks or humanized keys anywhere in the shadow DOM |
 | `tablet` | 768 x 1024 and 1024 x 768: collapsed columns, full-width editor, no horizontal page scroll, every tab, axe |

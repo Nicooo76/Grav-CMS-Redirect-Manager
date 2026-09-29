@@ -868,7 +868,7 @@ Other extension points, same mechanism (file + event):
 | Menubar button | `onApiMenubarItems` + `onApiMenubarAction` | - | - |
 | Markdown toolbar button | `onApiMarkdownEditorButtons` | modals | - |
 
-Routes in API: `ApiRouter.php:852-869, 1020, 1023-1030`. Only the panel tag form is not verified by me against the code (Skill says `grav-{slug}--…`).
+Routes in API: `ApiRouter.php:852-869, 1020, 1023-1030`. The panel tag `grav-<slug>--panel` is confirmed by `ContextPanelHost.svelte` `getTagName()` and by the plugin's Playwright spec (`tests/ui/specs/page-panel.spec.ts`). The host sets the attributes `route`, `lang` and `type` on the panel element and keeps them current, calls the `badgeEndpoint` with `?route=&lang=&type=`, and listens for `close`, `badge` and `resize` events on the element.
 
 ---
 
@@ -1070,7 +1070,7 @@ If a build (Vite) is desired after all: the loading mechanism implies the output
 - **Blob import and relative imports / code splitting**: inferred from loading mechanism (blob URL without base), not tested. Before Vite setup in a dev Grav, test: single file, no `import.meta.url`, no dynamic imports.
 - **CSP**: I found no Content-Security-Policy in the admin shell (`admin2.php`, API). If a host enforces `script-src` without `blob:`, all plugin components would fail. Not checked.
 - **Sidebar `route` with hash** not explicitly documented (see above).
-- **Context panels** were first judged irrelevant. Read later (`ContextPanelController.php` class comment, `ContextPanelTriggers.svelte`, `ContextPanelHost.svelte`): a plugin can put a button with a live badge into the page editor toolbar and open a slide-in panel there. It is the only supported place to show a plugin's notice next to the page editor, see DECISIONS.md D-030. The plugin does not use it in 1.0.0.
+- **Context panels** were first judged irrelevant. Read later (`ContextPanelController.php` class comment, `ContextPanelTriggers.svelte`, `ContextPanelHost.svelte`): a plugin can put a button with a live badge into the page editor toolbar and open a slide-in panel there. It is the only supported place to show a plugin's notice next to the page editor, see DECISIONS.md D-030. The plugin uses it since the page-editor panel was added (`admin-next/panels/redirect-manager.js`).
 - **Rate limit order for `*-script`**: skill claims exemption, default config names only `/sync/`, `/thumbnails/`; not traced to source.
 - **No live test**: none of this ran against a running Grav 2.1 instance. All statements come from source code at the commits listed above. Version drift possible (admin2 2.1.25, api 1.0.42).
 - **`onApiPluginPageInfo` with `page_type: 'component'`** without `.js` file: `has_custom_component` becomes `false`, SPA loads `page-script` anyway and reports "Failed to load page component" (`PluginPageComponent.svelte:71-74`). File must exist.

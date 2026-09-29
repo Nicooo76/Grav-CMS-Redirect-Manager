@@ -6,7 +6,6 @@ namespace Grav\Plugin\RedirectManager\App;
 
 use Closure;
 use DateTimeZone;
-use Grav\Plugin\RedirectManager\Domain\Rule;
 use Grav\Plugin\RedirectManager\Grav\ServiceFactory;
 use Grav\Plugin\RedirectManager\NotFound\DayRange;
 use Grav\Plugin\RedirectManager\Suggest\PageInfo;
@@ -45,13 +44,7 @@ final class StatsService
         $hits = $this->stats->store()->totalsByDay($from, $now);
         $today = DayRange::key($now->getTimestamp());
 
-        $rules = $this->rules->all();
-        $active = 0;
-        foreach ($rules as $rule) {
-            if ($rule->isActive($now)) {
-                ++$active;
-            }
-        }
+        $rules = $this->rules->summary();
 
         return [
             'not_found_today' => $notFound[$today] ?? 0,
@@ -60,10 +53,10 @@ final class StatsService
             'hits_today' => $hits[$today] ?? 0,
             'hits_7d' => $this->lastDays($hits, 7),
             'hits_by_day' => $hits,
-            'rules_total' => count($rules),
-            'rules_active' => $active,
+            'rules_total' => $rules['total'],
+            'rules_active' => $rules['active'],
             'open_suggestions' => count($this->services->suggestionStore()->open()),
-            'dead_targets' => $this->deadTargets($rules),
+            'dead_targets' => $this->deadTargets($rules['enabled']),
             'pending_deletes' => $this->pendingDeletes === null ? 0 : ($this->pendingDeletes)(),
         ];
     }
@@ -137,17 +130,10 @@ final class StatsService
     /**
      * Rules whose last live check found the target dead, as long as the rule still exists and is enabled.
      *
-     * @param list<Rule> $rules
+     * @param array<string, true> $enabled ids of the enabled rules
      */
-    private function deadTargets(array $rules): int
+    private function deadTargets(array $enabled): int
     {
-        $enabled = [];
-        foreach ($rules as $rule) {
-            if ($rule->enabled) {
-                $enabled[$rule->id] = true;
-            }
-        }
-
         $dead = 0;
         foreach ($this->services->checkResultStore()->all() as $result) {
             if ($result->isDead() && isset($enabled[$result->ruleId])) {

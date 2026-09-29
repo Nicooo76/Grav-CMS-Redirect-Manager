@@ -398,6 +398,27 @@ abstract class LogStoreContract extends TestCase
         self::assertSame('latest=2', $row->sampleQuery);
     }
 
+    public function testAggregatesOnlyKeepsPathHitsAndSkipsTheDetails(): void
+    {
+        $this->add('/x', self::day(-2), 'https://ref.example/a', language: 'de', query: 'q=1');
+        $this->add('/x', 10, 'https://ref.example/b', UserAgentClass::Bot, 'en');
+        $this->add('/y', 20);
+
+        $full = $this->store->groups($this->query());
+        $light = $this->store->groups($this->query(['aggregatesOnly' => true]));
+
+        self::assertSame($full->total, $light->total);
+        self::assertSame($full->totals->hits, $light->totals->hits);
+        self::assertSame($full->totals->uniquePaths, $light->totals->uniquePaths);
+        foreach ($full->rows as $i => $row) {
+            self::assertSame([$row->path, $row->hits, $row->firstSeen->getTimestamp(), $row->lastSeen->getTimestamp()], [$light->rows[$i]->path, $light->rows[$i]->hits, $light->rows[$i]->firstSeen->getTimestamp(), $light->rows[$i]->lastSeen->getTimestamp()]);
+        }
+        self::assertSame([], $light->rows[0]->topReferers);
+        self::assertSame([], $light->rows[0]->languages);
+        self::assertSame(0, array_sum($light->totals->byDay), 'no day totals without the second pass');
+        self::assertGreaterThan(0, array_sum($full->totals->byDay));
+    }
+
     public function testSampleQueryIsEmptyWithoutAnyQuery(): void
     {
         $this->add('/x');

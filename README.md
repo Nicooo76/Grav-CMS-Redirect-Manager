@@ -37,7 +37,7 @@ Admin 2 shows the plugin as one page with six tabs: Rules, 404 monitor, Suggesti
 | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/rules-light.png" alt="Rules tab in the light theme with pending decisions, new automatic redirects and the rule table" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/rules-dark.png" alt="Rules tab in the dark theme" width="440"> |
 
 <details>
-<summary>More screens: editor, 404 monitor, suggestions, tester, import, export, settings, dashboard widget</summary>
+<summary>More screens: editor, 404 monitor, suggestions, tester, import, export, settings, dashboard widget, page editor panel</summary>
 
 | Light | Dark |
 |---|---|
@@ -49,6 +49,7 @@ Admin 2 shows the plugin as one page with six tabs: Rules, 404 monitor, Suggesti
 | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/export-light.png" alt="Export cards for CSV, JSON, YAML, htaccess, nginx, Cloudflare, Netlify, site.yaml and WordPress" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/export-dark.png" alt="Export in the dark theme" width="440"> |
 | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/settings-light.png" alt="Settings tab with the Redirects section" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/settings-dark.png" alt="Settings in the dark theme" width="440"> |
 | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/dashboard-widget-light.png" alt="Admin 2 dashboard with the Redirects overview widget" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/dashboard-widget-dark.png" alt="Dashboard widget in the dark theme" width="440"> |
+| <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/page-panel-light.png" alt="Admin 2 page editor with the Redirects panel open: a new automatic redirect, the redirects to this page, old URLs with 404s and the form to add an old URL" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/page-panel-dark.png" alt="Page editor panel in the dark theme" width="440"> |
 
 </details>
 
@@ -87,6 +88,7 @@ Admin 2 shows the plugin as one page with six tabs: Rules, 404 monitor, Suggesti
 - Creates rules when a page gets a new slug or route, moves, is reorganized or is deleted. Children get one wildcard rule or one rule each.
 - For deleted pages you choose per site: ask, 410, redirect to the parent, or nothing. Pending decisions appear in Admin 2.
 - Works for changes made through Admin 2, the REST API and MCP, because those go through the API plugin.
+- The page editor gets a **Redirects** button with a badge. It counts the automatic redirects of the open page (and the pages below it) that nobody has looked at yet. The panel behind it lists the redirects to this page with hits and last hit, highlights the ones created just now with "Mark as seen", warns when a rule redirects the page away, shows old URLs that recorded 404s and adds an old URL for the page in one field (a 301 to this page, checked while you type). Read-only users see the lists without the form.
 
 **Tester and live check**
 
@@ -102,7 +104,7 @@ Admin 2 shows the plugin as one page with six tabs: Rules, 404 monitor, Suggesti
 **CLI, REST API, MCP**
 
 - `bin/plugin redirect-manager` with 13 commands, JSON output and exit codes for CI.
-- 40 REST routes with an OpenAPI 3.1 description.
+- 43 REST routes with an OpenAPI 3.1 description.
 - Six MCP tools for AI clients.
 
 **Events, webhooks, digest**
@@ -270,7 +272,7 @@ A rule is one entry in `user/data/redirect-manager/rules.yaml`. The same field n
 
 | Field | Values | Default | Meaning |
 |---|---|---|---|
-| `id` | text | generated | Unique id, for example `r0192f3c1a2b4f1e2d3`. |
+| `id` | text | generated | Unique id, for example `r0192f3c1a2b00f8a3c91e7`. |
 | `source` | text | required | Exact: a path, optionally with `?query`. Wildcard: a path with `*`. Regex: a PCRE pattern without delimiters. |
 | `target` | text | empty | Path or absolute URL. Empty for 410 and 451. |
 | `match_type` | `exact`, `wildcard`, `regex` | `exact` | How `source` is read. |
@@ -394,7 +396,7 @@ Options that come from the command line are validated. A bad value gives exit co
 | `test <url>` | Show what happens to a URL, or assert it. No request is made. | `--expect-status`, `--expect-location`, `--method` (default GET), `--language`, `--phase` early, not_found or any (default any), `--json` |
 | `stats` | Dashboard numbers: 404s, redirect hits, rules, suggestions, dead targets, pending deletes. | `--json` |
 | `import <file>` | Import a file. | `--format`, `--dry-run`, `--skip-duplicates` and `--no-skip-duplicates` (default skip), `--skip-invalid` (default off), `--json` |
-| `export` | Write rules to stdout or a file. | `--format` (default csv), `--output`, `-o`, `--only-enabled`, `--group`, `--json` |
+| `export` | Write rules to stdout or a file. | `--format` (default csv), `--output`, `-o`, `--only-enabled`, `--group`, `--host` (`cloudflare_csv`: host for rules without a host condition), `--json` |
 | `suggest` | Generate suggestions for open 404 paths and accept the confident ones. | `--days` (1 to 366, default 30), `--accept-min` (default `suggestions.bulk_accept_score`), `--no-accept`, `--dry-run`, `--json` |
 | `check-targets` | Send a live request to every enabled rule's target and list the dead ones. No rate limit. | `--base-url` (default `base_url`, then the site URL), `--json` |
 | `prune` | Delete or disable rules without a hit for a long time. | `--unused-days` (default 180), `--dry-run`, `--disable-only`, `--json` |
@@ -441,7 +443,7 @@ Any non-zero exit code fails the job. Use `--json` when you want to parse the re
 
 ## REST API
 
-The plugin registers 40 routes below the API plugin's prefix, `/api/v1` by default. They use the API plugin's authentication: an API key in `X-API-Key`, a JWT in `X-API-Token` or `Authorization: Bearer`, or the Admin 2 session.
+The plugin registers 43 routes below the API plugin's prefix, `/api/v1` by default. They use the API plugin's authentication: an API key in `X-API-Key`, a JWT in `X-API-Token` or `Authorization: Bearer`, or the Admin 2 session.
 
 Two permissions guard them. They appear in the Admin 2 user editor under "Redirects".
 
@@ -459,6 +461,7 @@ Two permissions guard them. They appear in the Admin 2 user editor under "Redire
 | Import, export | `GET /redirects/import/formats`, `GET /redirects/export`, `GET /redirects/site-config`; `POST .../import/preview`, `.../import/commit`, `.../import/sitemap`, `.../site-config/import` | read for GET, manage for POST |
 | Checks and stats | `GET /redirects/stats`, `GET /redirects/checks`, `GET /redirects/pages`; `POST /redirects/checks/run` | read for GET, manage for the run |
 | Auto redirects | `GET /redirects/pending`, `GET /redirects/badge`; `POST /redirects/pending/{id}/resolve`, `POST /redirects/badge/seen` | read for GET, manage for POST |
+| Page panel | `GET /redirects/page-context`, `GET /redirects/page-context/badge`; `POST /redirects/page-context/seen` | read for GET, manage for POST |
 
 A rule created through the API:
 
@@ -709,6 +712,8 @@ scripts/benchmark-request.sh          # 10,000 rules, 2,000 requests, about 40 s
 
 The result goes to `build/benchmark-request.md` and `build/benchmark-request.json`. Options such as `--rules 20000` and `--port` are described in [docs/PERFORMANCE.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/PERFORMANCE.md). To measure your own site, set `debug_timing: true` or `REDIRECT_MANAGER_TIMING=1` and read the `X-Redirect-Manager-Time` header.
 
+**Admin screens.** With 10,000 rules, 50,000 log entries of 404s and 5,000 suggestions, the rule list (a page of 50) answers in about 0.15 s, the dashboard in 0.18 s, the 404 monitor in 0.12 to 0.17 s and the suggestions in 0.15 s. That is the wall-clock time of a whole API request on the machine above, including Grav's boot. `tests/Integration/ApiPerformanceTest.php` fails above 200 ms for the rule list and 300 ms for the others. The first list after a change to `rules.yaml` also computes the analysis of all rules and takes about 0.6 s. Details: [docs/PERFORMANCE.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/PERFORMANCE.md).
+
 ## Security
 
 - **Open redirects.** A target is checked when the rule is saved and again for every redirect, after placeholders were filled in. That second check matters: a capture such as `/evil.com` turns the harmless template `/$1` into `//evil.com`. A location that starts with `//` or `/\`, also in percent-encoded or double-encoded form, is refused and the rule counts as not matching. External targets must be `http` or `https` URLs without user info, with a host on `security.allowed_hosts`, and a placeholder cannot sit in the host. Captured text is percent-encoded so it cannot add `?`, `#` or `&`. `security.allow_any_external` turns the allowlist off.
@@ -731,7 +736,7 @@ Each entry says what is limited, why, and what to do instead. The reasons are re
 
 - **One page in Admin 2.** Admin 2 gives a plugin one page route. Rules, 404 monitor, suggestions, tester, import / export and settings are tabs inside it, reachable by a hash (`#/rules`, `#/404`). Instead: link to a tab with its hash.
 - **Automatic redirects need the API plugin.** They come from the API plugin's page events. Pages changed on disk, by FTP, by a Git pull or by another tool fire no event, so no rule is created. Instead: the 404 monitor and the suggestions catch the dead URLs afterwards.
-- **No message on the page-save screen.** After you rename, move or delete a page, Admin 2 shows its own "saved" toast and gives a plugin no way to add a line to it. Admin 2 reads a toast from a response only for a plugin's own page, and the API plugin's page routes do not let a plugin change their response. Instead: the sidebar badge next to "Redirects" counts the new automatic rules and the pending decisions, and the Rules tab lists them with "Mark as seen".
+- **No toast on the page-save screen.** After you rename, move or delete a page, Admin 2 shows its own "saved" toast and gives a plugin no way to add a line to it. Admin 2 reads a toast from a response only for a plugin's own page, and the API plugin's page routes do not let a plugin change their response. Instead: the page editor's toolbar has a Redirects button whose badge counts the new automatic rules of the open page, and its panel lists them with "Mark as seen". The sidebar badge next to "Redirects" counts all new automatic rules and the pending decisions, and the Rules tab lists them too.
 - **Sidebar badge shows 0.** After you clear the last item in the open page, Admin 2 shows "0" until the next reload, because it ignores a live update to nothing. After a reload the badge is empty. Instead: reload, or ignore the "0".
 - **Moves that rename pages with translated slugs.** For a single move, the plugin derives the old routes because Grav reports the change only after the folder was renamed. That is exact for moves and for renames on sites without per-language slugs. For a move that renames a page with translated slugs it is exact only for the languages whose slug follows the folder. Reorganize, update and delete are exact. Instead: check the new rules after such a move, or rename in a separate step.
 - **Deleting one language does nothing.** Deleting a single translation of a page that keeps other translations creates no rule, because Grav can show the default language instead and a 410 could hide a live page. Instead: the 404 monitor shows the URL if it really dies.
@@ -752,7 +757,7 @@ Each entry says what is limited, why, and what to do instead. The reasons are re
 
 - **SQLite is for the 404 log only.** `log.backend: sqlite` moves the 404 log. Rules stay in `rules.yaml`, and hit counts and statistics stay in files. Rules in YAML are what Git Sync can diff, merge and restore, and a database file is none of that. Instead: to keep rules in Git, ignore `404.sqlite` and commit `rules.yaml`.
 - **New rules default to 302** on a stock Grav, because the plugin follows Grav's `redirect_default_code`. Instead: set `redirects.default_status` to 301.
-- **The Cloudflare export needs a host.** Only the REST route takes `host`. Admin 2 and the CLI export rules with a host condition and skip the others. Instead: use the REST route with `host` for Cloudflare.
+- **The Cloudflare export needs a host.** Every source needs one. Rules with a host condition bring it, for all others pass `host` (REST route) or `--host=example.org` (CLI). Admin 2 has no field for it and skips rules without a host condition. Instead: use the CLI option or the REST parameter for Cloudflare.
 - **Export formats differ.** No format other than the plugin's own carries everything. The export names every skipped and simplified rule. Instead: read that list, or export as JSON or YAML.
 
 **Scheduler, matching and web server**
@@ -763,7 +768,7 @@ Each entry says what is limited, why, and what to do instead. The reasons are re
 
 **Testing**
 
-- **Tested setup.** Development and all tests ran on Grav 2.2.2 with PHP 8.3 to 8.5, mostly on the PHP built-in server. Not tested: Grav 2.1.x, reverse proxies and CDNs, Apache and nginx in production, multisite, the real Git Sync plugin, Admin 2 in German in a browser. Subfolder installs are covered through `system.custom_base_url`. Instead: try your setup on a copy and report what breaks.
+- **Tested setup.** Development and all tests ran on Grav 2.2.2 with PHP 8.3 to 8.5, mostly on the PHP built-in server. Not tested: Grav 2.1.x, reverse proxies and CDNs, Apache and nginx in production, the real Git Sync plugin, Admin 2 in German in a browser. Multisite is tested on the PHP built-in server (`tests/Integration/MultisiteTest.php`, two sites behind one Grav). Subfolder installs are covered through `system.custom_base_url`. Instead: try your setup on a copy and report what breaks.
 
 ## FAQ
 
@@ -793,7 +798,7 @@ Turn on `security.trust_proxy_headers` only if the proxy sets `X-Forwarded-Host`
 
 ### Does it work with multisite?
 
-The data folder is `user://data/redirect-manager/`, and `user://` is the folder of the current site, so each site of a Grav multisite has its own rules, log and settings. This was not tested.
+The data folder is `user://data/redirect-manager/`, and `user://` is the folder of the current site, so each site of a Grav multisite has its own rules, 404 log, hit counts, compiled rule cache and settings. `tests/Integration/MultisiteTest.php` covers this on a Grav installation with a `setup.php` that maps the host to `user/sites/<name>/`: a rule of site A does not apply on site B, and `bin/plugin redirect-manager` works on the site that your `setup.php` selects. One thing is Grav's, not the plugin's: Grav's `problems` plugin checks the folders `user/accounts`, `user/data`, `user/pages`, `user/config`, `user/plugins` and `user/themes` under the web root, which a multisite installation does not have there. It then answers every frontend request with a 500 page. Disable it per site with `enabled: false` in `user/sites/<name>/config/plugins/problems.yaml`.
 
 ### How does it handle several languages?
 
@@ -878,6 +883,6 @@ Redirect Manager leitet Besucher von alten auf neue URLs um und zeigt, welche al
 
 Ob diese Vorkehrungen für Ihre rechtlichen Pflichten genügen, entscheiden Sie. Das ist keine Rechtsberatung.
 
-**Bekannte Grenzen.** Automatische Weiterleitungen entstehen nur bei Änderungen über Admin 2, die REST-API oder MCP. Seiten, die Sie per FTP oder Git ändern, lösen nichts aus. Dafür sind der 404-Monitor und die Vorschläge da. Beim Speichern einer Seite zeigt Admin 2 keinen Hinweis des Plugins an, weil Admin 2 Plugins dafür keine Möglichkeit gibt. Die Zahl neben "Redirects" im Admin-Menü und die Liste auf dem Reiter Rules melden neue automatische Regeln. Die Zahl zeigt nach dem Abhaken der letzten Meldung bis zum Neuladen "0". Der Befehl zum Auflisten heißt `rules` statt `list`, weil `list` die Befehlsübersicht von `bin/plugin` ersetzen würde. SQLite gilt nur für das 404-Protokoll, die Regeln bleiben in YAML, damit Git Sync sie vergleichen kann. Die Rechte heißen `api.redirects.read` und `api.redirects.manage`. Nach einem Update starten Sie den MCP-Server neu. Alle Grenzen stehen im englischen Abschnitt [Known limits](#known-limits).
+**Bekannte Grenzen.** Automatische Weiterleitungen entstehen nur bei Änderungen über Admin 2, die REST-API oder MCP. Seiten, die Sie per FTP oder Git ändern, lösen nichts aus. Dafür sind der 404-Monitor und die Vorschläge da. Beim Speichern einer Seite zeigt Admin 2 keinen Hinweis des Plugins an, weil Admin 2 Plugins dafür keine Möglichkeit gibt. Stattdessen hat der Seiteneditor eine Schaltfläche "Redirects" mit einer Zahl für die neuen automatischen Regeln der offenen Seite. Das Panel dahinter listet die Weiterleitungen dieser Seite auf, und Sie tragen dort eine alte URL ein. Die Zahl neben "Redirects" im Admin-Menü und die Liste auf dem Reiter Rules melden neue automatische Regeln. Die Zahl zeigt nach dem Abhaken der letzten Meldung bis zum Neuladen "0". Der Befehl zum Auflisten heißt `rules` statt `list`, weil `list` die Befehlsübersicht von `bin/plugin` ersetzen würde. SQLite gilt nur für das 404-Protokoll, die Regeln bleiben in YAML, damit Git Sync sie vergleichen kann. Multisite ist getestet (`tests/Integration/MultisiteTest.php`): Jede Site hat eigene Regeln, ein eigenes 404-Protokoll, eigene Trefferzahlen und einen eigenen Regel-Cache. Das Grav-Plugin `problems` prüft feste Ordner unter `user/` im Webroot, die es bei Multisite dort nicht gibt, und antwortet dann mit einer 500-Seite. Schalten Sie es pro Site ab (`enabled: false` in `user/sites/<name>/config/plugins/problems.yaml`). Für den Cloudflare-Export geben Sie einen Host an: `--host=example.org` in der Kommandozeile, `host` in der REST-Route. Regeln mit Host-Bedingung bringen ihren eigenen mit. Die Rechte heißen `api.redirects.read` und `api.redirects.manage`. Nach einem Update starten Sie den MCP-Server neu. Alle Grenzen stehen im englischen Abschnitt [Known limits](#known-limits).
 
 **Weiter lesen** (englisch): [Configuration reference](#configuration-reference) für jede Einstellung, [Rule reference](#rule-reference) für Regelfelder und Reihenfolge, [CLI reference](#cli-reference) mit Exit-Codes und CI-Beispiel, [REST API](#rest-api), [Security](#security), [FAQ](#faq).

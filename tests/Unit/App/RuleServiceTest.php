@@ -204,6 +204,54 @@ final class RuleServiceTest extends AppTestCase
         self::assertEqualsCanonicalizing(['idle', 'old-hit', 'used', 'young'], $this->ids(['unused_days' => '1']));
     }
 
+    // ================================================================ summary
+
+    public function testSummaryCountsRulesActiveNowAndListsTheEnabledOnes(): void
+    {
+        $this->seed(
+            ['id' => 'on', 'source' => '/on', 'target' => '/t1'],
+            ['id' => 'off', 'source' => '/off', 'target' => '/t2', 'enabled' => false],
+            ['id' => 'expired', 'source' => '/expired', 'target' => '/t3', 'expires_at' => '2026-09-01T00:00:00+00:00'],
+            ['id' => 'later', 'source' => '/later', 'target' => '/t4', 'active_from' => '2026-12-01T00:00:00+00:00'],
+            ['id' => 'window', 'source' => '/window', 'target' => '/t5', 'active_from' => '2026-09-01T00:00:00+00:00', 'expires_at' => '2026-12-01T00:00:00+00:00'],
+            ['id' => 'ends-now', 'source' => '/ends-now', 'target' => '/t6', 'expires_at' => '2026-09-29T10:00:00+00:00'],
+            ['id' => 'starts-now', 'source' => '/starts-now', 'target' => '/t7', 'active_from' => '2026-09-29T10:00:00+00:00'],
+        );
+
+        $summary = $this->rules()->summary();
+
+        self::assertSame(7, $summary['total']);
+        // on, window, starts-now (a rule that starts at this very second is active); expired and ends-now are over.
+        self::assertSame(3, $summary['active']);
+        self::assertEqualsCanonicalizing(['on', 'expired', 'later', 'window', 'ends-now', 'starts-now'], array_keys($summary['enabled']));
+    }
+
+    public function testSummaryAgreesWithIsActiveOfEveryRule(): void
+    {
+        $rows = [];
+        foreach ([null, '2026-09-01T00:00:00+00:00', '2026-09-29T10:00:00+00:00', '2026-12-01T00:00:00+00:00'] as $i => $from) {
+            foreach ([null, '2026-09-15T00:00:00+00:00', '2026-09-29T10:00:00+00:00', '2027-01-01T00:00:00+00:00'] as $j => $until) {
+                foreach ([true, false] as $enabled) {
+                    $row = ['id' => sprintf('r%d-%d-%d', $i, $j, (int) $enabled), 'source' => sprintf('/s%d-%d-%d', $i, $j, (int) $enabled), 'target' => '/t', 'enabled' => $enabled];
+                    $rows[] = $row + ($from === null ? [] : ['active_from' => $from]) + ($until === null ? [] : ['expires_at' => $until]);
+                }
+            }
+        }
+        $this->seed(...$rows);
+        $now = $this->clock->now();
+        $expected = count(array_filter($this->app->services()->repository()->all(), static fn (Rule $r): bool => $r->isActive($now)));
+
+        $summary = $this->rules()->summary();
+
+        self::assertSame(count($rows), $summary['total']);
+        self::assertSame($expected, $summary['active']);
+    }
+
+    public function testSummaryOfNoRules(): void
+    {
+        self::assertSame(['total' => 0, 'active' => 0, 'enabled' => []], $this->rules()->summary());
+    }
+
     // ================================================================ list: sorting
 
     private function seedForSorting(): void
@@ -259,6 +307,88 @@ final class RuleServiceTest extends AppTestCase
         $this->seedForSorting(); // r3 is "/C-src": after /b-src although "C" sorts before "b" bytewise
 
         self::assertSame(['r2', 'r1', 'r3'], $this->ids(['sort' => 'source', 'dir' => 'asc']));
+    }
+
+    /**
+     * The order the list had before array_multisort(): a usort() with this comparator.
+     *
+     * @param array<string, array{total: int, last: int}> $hits
+     */
+    private static function referenceComparator(string $sort, string $direction, array $hits): \Closure
+    {
+        $sign = $direction === 'asc' ? 1 : -1;
+        $ts = static fn (?\DateTimeImmutable $d): int => $d?->getTimestamp() ?? 0;
+
+        return static function (Rule $a, Rule $b) use ($sort, $direction, $sign, $ts, $hits): int {
+            $natural = ($b->priority <=> $a->priority)
+                ?: ($a->matchType->order() <=> $b->matchType->order())
+                ?: ($ts($a->createdAt) <=> $ts($b->createdAt))
+                ?: strcmp($a->id, $b->id);
+            if ($sort === 'priority') {
+                return $direction === 'desc' ? $natural : -$natural;
+            }
+            $cmp = match ($sort) {
+                'source' => strcasecmp($a->source, $b->source),
+                'target' => strcasecmp($a->target, $b->target),
+                'status' => $a->status->value <=> $b->status->value,
+                'hits' => ($hits[$a->id]['total'] ?? 0) <=> ($hits[$b->id]['total'] ?? 0),
+                'last_hit' => ($hits[$a->id]['last'] ?? 0) <=> ($hits[$b->id]['last'] ?? 0),
+                'created_at' => $ts($a->createdAt) <=> $ts($b->createdAt),
+                default => $ts($a->updatedAt) <=> $ts($b->updatedAt),
+            };
+
+            return $cmp !== 0 ? $cmp * $sign : $natural;
+        };
+    }
+
+    public function testEverySortGivesTheSameOrderAsTheComparatorItReplaced(): void
+    {
+        mt_srand(29092026);
+        $rows = [];
+        $types = ['exact', 'wildcard', 'regex'];
+        $sources = ['/Alpha', '/alpha', '/beta', '/Beta', '/gamma', '/Ünder', '/z'];
+        for ($i = 0; $i < 240; ++$i) {
+            $type = $types[mt_rand(0, 2)];
+            $base = $sources[mt_rand(0, count($sources) - 1)] . '-' . mt_rand(0, 9);
+            $rows[] = [
+                'id' => sprintf('id-%03d', mt_rand(0, 999) + $i * 1000),
+                'source' => $type === 'exact' ? $base : ($type === 'wildcard' ? $base . '/*' : '^' . $base . '/(\d+)$'),
+                'target' => '/t/' . $sources[mt_rand(0, count($sources) - 1)] . mt_rand(0, 3),
+                'match_type' => $type,
+                'status' => [301, 302, 307, 308][mt_rand(0, 3)],
+                'priority' => mt_rand(0, 3),
+                'created_at' => sprintf('2026-01-%02dT00:00:00+00:00', mt_rand(1, 5)),
+                'updated_at' => sprintf('2026-02-%02dT00:00:00+00:00', mt_rand(1, 5)),
+            ];
+        }
+        $this->seed(...$rows);
+        foreach ($rows as $row) {
+            $n = mt_rand(0, 4);
+            if ($n > 0) {
+                $this->hit($row['id'], '-' . mt_rand(1, 3) . ' days', $n);
+            }
+        }
+        $this->freshApp();
+
+        $all = $this->app->services()->repository()->all();
+        $stats = $this->app->services()->statsStore();
+        $stats->aggregate();
+        $hits = [];
+        foreach ($stats->all() as $id => $s) {
+            $hits[(string) $id] = ['total' => $s->total, 'last' => $s->lastHit?->getTimestamp() ?? 0];
+        }
+        foreach (RuleQuery::SORTS as $sort) {
+            foreach (['asc', 'desc'] as $direction) {
+                $expected = $all;
+                usort($expected, self::referenceComparator($sort, $direction, $hits));
+
+                self::assertSame(
+                    array_map(static fn (Rule $r): string => $r->id, $expected),
+                    array_map(static fn (array $row): string => $row['id'], $this->rules()->list(RuleQuery::fromArray(['sort' => $sort, 'dir' => $direction, 'per_page' => '500']))['rows']),
+                    $sort . ' ' . $direction,
+                );
+            }
+        }
     }
 
     private function seedForNaturalOrder(): void
@@ -1835,6 +1965,63 @@ final class RuleServiceTest extends AppTestCase
         self::assertEqualsCanonicalizing($ids, $this->storedIds());
         self::assertSame('2026-09-29T10:00:00+00:00', $this->stored($ids[0])->createdAt?->format(Rule::DATE_FORMAT));
         self::assertSame(['import', 'import'], array_map(static fn (array $e): string => $e['payload']['action'], $this->events));
+    }
+
+    /**
+     * @param list<string> $ids ids the generator hands out, in order
+     */
+    private function serviceWithIds(array $ids): RuleService
+    {
+        $queue = $ids;
+
+        return new RuleService(
+            $this->app->services(),
+            new SiteContext(baseUrl: 'http://localhost:8080', languages: [], redirectDefaultCode: 301),
+            $this->app->statsAccess(),
+            $this->app->events(),
+            static function () use (&$queue): string {
+                $next = array_shift($queue);
+                if ($next === null) {
+                    throw new \LogicException('the id generator ran dry');
+                }
+
+                return $next;
+            },
+        );
+    }
+
+    public function testCreateManyTakesAnotherIdWhenAGeneratedOneIsAlreadyStored(): void
+    {
+        $this->seed(['id' => 'taken', 'source' => '/existing', 'target' => '/e']);
+
+        // The generator hands out the stored id twice, and one id twice within the batch, before a free one.
+        $result = $this->serviceWithIds(['taken', 'dup', 'dup', 'dup', 'fresh-1', 'fresh-2', 'fresh-3'])->createMany([
+            self::newRule('/a', '/ta'),
+            self::newRule('/b', '/tb'),
+            self::newRule('/c', '/tc'),
+        ]);
+
+        self::assertSame([], $result['rejected']);
+        $ids = array_map(static fn (Rule $r): string => $r->id, $result['created']);
+        self::assertSame(3, count(array_unique($ids)));
+        self::assertNotContains('taken', $ids);
+        self::assertEqualsCanonicalizing(['taken', ...$ids], $this->storedIds());
+        self::assertSame('/existing', $this->stored('taken')->source, 'the stored rule was not touched');
+    }
+
+    public function testAnImportOfManyRulesNeverFailsOnDuplicateIds(): void
+    {
+        $rules = [];
+        for ($i = 0; $i < 2000; ++$i) {
+            $rules[] = self::newRule('/old/' . $i, '/new/' . $i);
+        }
+        $service = $this->rules();
+        $first = $service->createMany($rules);
+        $second = $service->createMany(array_map(static fn (Rule $r): Rule => self::newRule($r->source . '-b', $r->target . '-b'), $rules));
+
+        self::assertCount(2000, $first['created']);
+        self::assertCount(2000, $second['created']);
+        self::assertCount(4000, array_unique($this->storedIds()));
     }
 
     public function testCreateManyUsesTheGivenEventAction(): void

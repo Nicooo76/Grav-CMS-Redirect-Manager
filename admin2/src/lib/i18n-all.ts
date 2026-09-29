@@ -12,6 +12,7 @@ import importexport from '../i18n/en/importexport';
 import settings from '../i18n/en/settings';
 import auto from '../i18n/en/auto';
 import widget from '../i18n/en/widget';
+import panel from '../i18n/en/panel';
 
 export const allEn: Record<string, string> = {
   ...common,
@@ -24,4 +25,5 @@ export const allEn: Record<string, string> = {
   ...settings,
   ...widget,
   ...auto,
+  ...panel,
 };

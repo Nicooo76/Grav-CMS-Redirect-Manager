@@ -12,6 +12,7 @@ use Grav\Plugin\RedirectManager\Matching\Matcher;
 use Grav\Plugin\RedirectManager\Matching\MatcherOptions;
 use Grav\Plugin\RedirectManager\Matching\RuleCompiler;
 use Grav\Plugin\RedirectManager\Storage\CompiledRuleCache;
+use Grav\Plugin\RedirectManager\Storage\ParsedRulesCache;
 use Grav\Plugin\RedirectManager\Storage\RuleRepository;
 use Grav\Plugin\RedirectManager\Tests\Unit\NotFound\Support\TempDirTrait;
 use Grav\Plugin\RedirectManager\Util\FixedClock;
@@ -85,6 +86,28 @@ final class CompiledRuleCacheTest extends TestCase
         clearstatcache();
         self::assertSame($before['ino'] ?? 0, stat($cache->cacheFile())['ino'] ?? -1, 'warm load does not rewrite the file');
         self::assertSame($before['mtime'] ?? 0, stat($cache->cacheFile())['mtime'] ?? -1);
+    }
+
+    public function testARebuildUsesAndFillsTheParsedRulesCache(): void
+    {
+        $parsed = new ParsedRulesCache($this->tmp . '/cache', $this->repo->file());
+        // The plugin's own writes fill the parsed rows: the rebuild after an edit does not parse YAML again.
+        $repo = new RuleRepository($this->tmp . '/data', $this->clock, $parsed);
+        $repo->upsert(new Rule('a', '/old', '/new'));
+        $hash = RuleRepository::hashContent((string) file_get_contents($repo->file()));
+        $parsed->store($hash, [['id' => 'from-cache', 'source' => '/cached', 'target' => '/served']]);
+
+        $cache = new CompiledRuleCache($this->tmp . '/cache', $repo->file(), new RuleCompiler(), null, $parsed);
+
+        self::assertSame('/served', $this->target($cache, '/cached'));
+        self::assertNull($this->target($cache, '/old'), 'the rows of the cache, not the YAML, were compiled');
+
+        // A hand edit changes the hash: the YAML is parsed and its rows are stored for the next rebuild.
+        file_put_contents($repo->file(), "rules:\n  - id: edited\n    source: /edited\n    target: /now\n");
+        $fresh = new CompiledRuleCache($this->tmp . '/cache', $repo->file(), new RuleCompiler(), null, $parsed);
+
+        self::assertSame('/now', $this->target($fresh, '/edited'));
+        self::assertNotNull($parsed->rows(RuleRepository::hashContent((string) file_get_contents($repo->file()))));
     }
 
     public function testRebuildsWhenRulesChange(): void

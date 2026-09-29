@@ -27,6 +27,7 @@ final class RedirectService
     private ?CheckService $checks = null;
     private ?StatsService $stats = null;
     private ?StatsAccess $statsAccess = null;
+    private ?PageContextService $pageContext = null;
 
     /**
      * @param Closure(): int|null $pendingDeletes number of deleted pages waiting for a decision (auto redirects); null = 0
@@ -86,6 +87,11 @@ final class RedirectService
         return $this->stats ??= new StatsService($this->services, $this->rules(), $this->statsAccess(), $this->pendingDeletes);
     }
 
+    public function pageContext(): PageContextService
+    {
+        return $this->pageContext ??= new PageContextService($this->services, $this->rules(), $this->tester(), $this->statsAccess());
+    }
+
     public function statsAccess(): StatsAccess
     {
         return $this->statsAccess ??= new StatsAccess($this->services->statsStore());
@@ -97,12 +103,14 @@ final class RedirectService
     }
 
     /**
-     * Drops the compiled rule set and the analysis cache and compiles again. Returns the number of compiled rules.
+     * Drops the compiled rule set, the parsed rules and the analysis cache and compiles again. Returns the number of
+     * compiled rules.
      */
     public function rebuildCache(): int
     {
         $cache = $this->services->compiledCache();
         $cache->invalidate();
+        $this->services->parsedRules()->forget();
         foreach (glob($this->services->cacheDir() . '/analysis-*.php') ?: [] as $file) {
             @unlink($file);
         }

@@ -252,6 +252,30 @@ final class ApiImportExportTest extends ApiTestCase
         self::assertSame('/ok', $preview['rows'][2]['rule']['source']);
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function lineFormatsOnACsvFile(): iterable
+    {
+        yield 'htaccess' => ['htaccess'];
+        yield 'nginx' => ['nginx'];
+    }
+
+    #[DataProvider('lineFormatsOnACsvFile')]
+    public function testAFileOfTheWrongKindIsAFileErrorNotAnEmptyImport(string $format): void
+    {
+        $csv = "source,target,status\n/old,/new,301\n";
+
+        $preview = $this->api->post('/redirects/import/preview', ['content' => $csv, 'format' => $format])->data();
+        self::assertSame('no_directives', $preview['errors'][0]['code'], 'the preview shows it');
+        self::assertSame(0, $preview['counts']['total']);
+
+        $commit = $this->api->post('/redirects/import/commit', ['content' => $csv, 'format' => $format]);
+        $this->assertProblem($commit, 422);
+        self::assertSame(['content', 'no_directives'], [$commit->errors()[0]['field'], $commit->errors()[0]['code']]);
+        self::assertSame([], $this->api->get('/redirects/rules')->data(), 'nothing was stored');
+    }
+
     public function testInvalidRequestsAre422(): void
     {
         $empty = $this->api->post('/redirects/import/commit', ['content' => '', 'format' => 'csv']);

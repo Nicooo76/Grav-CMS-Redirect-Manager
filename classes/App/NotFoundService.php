@@ -49,6 +49,7 @@ final class NotFoundService
     public const MAX_PATTERN_LENGTH = 300;
 
     private ?Suggester $suggester = null;
+    private ?bool $anyRules = null;
 
     public function __construct(
         private readonly ServiceFactory $services,
@@ -67,6 +68,7 @@ final class NotFoundService
      */
     public function groups(array $query): array
     {
+        $this->anyRules = null;
         [$from, $to] = $this->range($query);
 
         $class = null;
@@ -372,7 +374,10 @@ final class NotFoundService
 
     private function hasRule(string $path, string $host, ?string $language): bool
     {
-        if ($this->rules->all() === []) {
+        // Asked once per call, not once per row: RuleService::all() reads and hydrates every rule (0.1 s at 10,000 rules),
+        // summary() only counts the stored rows.
+        $this->anyRules ??= $this->rules->summary()['total'] > 0;
+        if (!$this->anyRules) {
             return false;
         }
         try {

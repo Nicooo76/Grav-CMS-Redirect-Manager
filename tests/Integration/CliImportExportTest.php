@@ -215,9 +215,9 @@ final class CliImportExportTest extends IntegrationTestCase
         yield 'crawler_csv' => ['crawler_csv', ExitCode::INVALID];
         // Line formats read a CSV row as an unfinished line.
         yield 'netlify' => ['netlify', ExitCode::INVALID];
-        // These find no directive in a CSV file: nothing is imported, and that is not an error (the file was readable).
-        yield 'htaccess' => ['htaccess', ExitCode::OK];
-        yield 'nginx' => ['nginx', ExitCode::OK];
+        // These find no directive in a CSV file and report the file-level error no_directives.
+        yield 'htaccess' => ['htaccess', ExitCode::INVALID];
+        yield 'nginx' => ['nginx', ExitCode::INVALID];
     }
 
     #[DataProvider('wrongFormatsForACsvFile')]

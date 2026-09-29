@@ -15,6 +15,7 @@ use Grav\Plugin\RedirectManager\ImportExport\ImportIssue;
 use Grav\Plugin\RedirectManager\ImportExport\ImportOptions;
 use Grav\Plugin\RedirectManager\ImportExport\ImportRow;
 use Grav\Plugin\RedirectManager\Util\Clock;
+use Grav\Plugin\RedirectManager\Util\Ids;
 
 /**
  * Turns loosely typed field arrays from any adapter into validated rules: normalises sources
@@ -28,14 +29,11 @@ final class RowFactory
         'active_from', 'expires_at', 'note', 'tags', 'query_ignore', 'created_at', 'updated_at',
     ];
 
-    private int $baseMs;
-    private int $seq = 0;
     /** One instance shared by all rules of an import: 50,000 rules would otherwise hold 100,000 date objects. */
     private DateTimeImmutable $now;
 
     public function __construct(private readonly ImportOptions $options, Clock $clock)
     {
-        $this->baseMs = (int) floor(microtime(true) * 1000);
         $this->now = $clock->now();
     }
 
@@ -185,7 +183,8 @@ final class RowFactory
 
     private function nextId(): string
     {
-        return 'r' . str_pad(dechex($this->baseMs + $this->seq++), 11, '0', STR_PAD_LEFT) . bin2hex(random_bytes(3));
+        // Strictly increasing within the process, so ids sort in file order and never repeat.
+        return Ids::rule();
     }
 
     /**

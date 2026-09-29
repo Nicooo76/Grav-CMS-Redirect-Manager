@@ -129,6 +129,28 @@ test.describe('German UI', () => {
     await expectClean(app, 'pending panel');
   });
 
+  test('the panel in the page editor is German (unseen notice, lists, form)', async ({ page, site, api }) => {
+    // a slug change through the API is what the editor's save sends; the plugin creates the automatic rule
+    expect((await api('PATCH', '/pages/blog/wintercamping-tipps', { header: { slug: 'wintercamping-guide' } })).status).toBe(200);
+    await page.goto(`${site.baseUrl}/admin/pages/edit/blog/wintercamping-guide`);
+    // the button's tooltip is translated by the server in the site's language (English here), Admin 2 shows it verbatim
+    const trigger = page.locator(`button[title="Redirects for this page"], button[title="${de['PANEL.TITLE']}"]`);
+    await expect(trigger).toBeVisible();
+    await expect(trigger.locator('span')).toHaveText('1');
+    await trigger.click();
+    const panel = page.locator('grav-redirect-manager--panel');
+    await expect(panel.getByRole('heading', { level: 2 })).toHaveText('Weiterleitungen dieser Seite');
+    await expect(panel.getByTestId('rm-panel-unseen').getByRole('heading')).toHaveText('Gerade automatisch angelegt');
+    await expect(panel.getByRole('button', { name: 'Als gesehen markieren' })).toBeVisible();
+    await expect(panel.getByRole('heading', { level: 3, name: 'Weiterleitungen auf diese Seite' })).toBeVisible();
+    await panel.getByLabel('Alte URL', { exact: true }).fill('/alte-adresse');
+    await expect(panel.getByRole('button', { name: 'Weiterleitung anlegen' })).toBeEnabled();
+    await expect(panel.getByRole('link', { name: 'Im Redirect Manager öffnen' })).toBeVisible();
+    const texts = await shadowTexts(panel);
+    expect(texts.length).toBeGreaterThan(8);
+    expect(findLeaks(texts)).toEqual({ rawKeys: [], english: [], humanized: [] });
+  });
+
   test('dashboard widget is German', async ({ page, site }) => {
     await page.goto(`${site.baseUrl}/admin/`);
     const widget = page.locator('grav-widget-redirect-manager-overview');

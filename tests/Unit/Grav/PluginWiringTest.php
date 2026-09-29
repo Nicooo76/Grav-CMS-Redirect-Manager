@@ -59,11 +59,14 @@ final class PluginWiringTest extends GravTestCase
         RouteRegistrar::registerAuto($routes);
 
         $keys = array_keys($routes->routes);
-        self::assertCount(40, $keys);
+        self::assertCount(43, $keys);
         self::assertSame($keys, array_values(array_unique($keys)), 'no route twice');
         self::assertSame(
-            ['GET /redirects/pending', 'POST /redirects/pending/{id}/resolve', 'GET /redirects/badge', 'POST /redirects/badge/seen'],
-            array_slice($keys, -4),
+            [
+                'GET /redirects/pending', 'POST /redirects/pending/{id}/resolve', 'GET /redirects/badge', 'POST /redirects/badge/seen',
+                'GET /redirects/page-context', 'GET /redirects/page-context/badge', 'POST /redirects/page-context/seen',
+            ],
+            array_slice($keys, -7),
         );
         self::assertSame(['GET /redirects/rules', 'POST /redirects/rules'], array_slice($keys, 0, 2));
         foreach ($routes->routes as $key => [$class, $method]) {
@@ -133,6 +136,27 @@ final class PluginWiringTest extends GravTestCase
         self::assertSame('api.redirects.read', $widget['authorize'], 'a string: an array ends in a 500 for non-super admins');
         self::assertSame('/redirects/stats', $widget['dataEndpoint']);
         self::assertSame('Redirects overview', $widget['label']);
+    }
+
+    public function testTheContextPanelIsForPagesNeedsOnlyTheReadPermissionAsAStringAndHasABadge(): void
+    {
+        $event = new Event(['panels' => [['id' => 'other']]]);
+        $this->admin(new Language())->contextPanels($event);
+
+        self::assertSame('other', $event['panels'][0]['id']);
+        $panel = $event['panels'][1];
+        self::assertSame('redirect-manager', $panel['id']);
+        self::assertSame('redirect-manager', $panel['plugin'], 'the script comes from admin-next/panels/<plugin>.js');
+        self::assertSame(['pages'], $panel['contexts']);
+        self::assertSame('api.redirects.read', $panel['authorize'], 'a string, like the widget');
+        self::assertSame('/redirects/page-context/badge', $panel['badgeEndpoint']);
+        self::assertSame('route', $panel['icon'], 'a Lucide name');
+        self::assertSame('Umleitungen', $panel['label'], 'translated here, Admin 2 shows it verbatim');
+        self::assertIsInt($panel['width']);
+
+        $untranslated = new Event();
+        $this->admin()->contextPanels($untranslated);
+        self::assertSame('Redirects for this page', $untranslated['panels'][0]['label']);
     }
 
     public function testMcpToolsAreRegisteredFromTheManifestInConfig(): void

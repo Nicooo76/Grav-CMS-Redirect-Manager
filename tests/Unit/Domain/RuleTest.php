@@ -53,7 +53,7 @@ final class RuleTest extends TestCase
     {
         $rule = Rule::fromArray([]);
 
-        self::assertMatchesRegularExpression('/^r[0-9a-f]{17}$/', $rule->id);
+        self::assertMatchesRegularExpression('/^r[0-9a-f]{22}$/', $rule->id);
         self::assertSame('', $rule->source);
         self::assertSame('', $rule->target);
         self::assertSame(MatchType::Exact, $rule->matchType);
@@ -223,7 +223,7 @@ final class RuleTest extends TestCase
 
     public function testIdThatIsNotAScalarIsReplaced(): void
     {
-        self::assertMatchesRegularExpression('/^r[0-9a-f]{17}$/', Rule::fromArray(['id' => ['x']])->id);
+        self::assertMatchesRegularExpression('/^r[0-9a-f]{22}$/', Rule::fromArray(['id' => ['x']])->id);
     }
 
     public function testPriorityIsCastToInt(): void

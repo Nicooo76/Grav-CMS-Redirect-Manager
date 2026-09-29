@@ -28,6 +28,9 @@ final class RegisteredRoutes
         'GET /redirects/suggest' => [['path' => '/x'], null],
         'POST /redirects/rules/validate' => [[], ['source' => '/v', 'target' => '/typography']],
         'POST /redirects/test' => [[], ['url' => '/x']],
+        'GET /redirects/page-context' => [['route' => '/x'], null],
+        'GET /redirects/page-context/badge' => [['route' => '/x'], null],
+        'POST /redirects/page-context/seen' => [[], ['route' => '/x']],
     ];
 
     /**

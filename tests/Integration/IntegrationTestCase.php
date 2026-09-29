@@ -23,7 +23,18 @@ abstract class IntegrationTestCase extends TestCase
         if (TestSite::baseDir() === null) {
             self::markTestSkipped('No Grav test site. Run scripts/setup-test-site.sh first.');
         }
-        self::$site = TestSite::create();
+        self::$site = TestSite::create(static::siteIni());
+    }
+
+    /**
+     * php.ini settings of the test site's `php -S` process. Benchmarks turn OPcache on for the CLI server, as a
+     * production PHP has it.
+     *
+     * @return array<string, string>
+     */
+    protected static function siteIni(): array
+    {
+        return [];
     }
 
     public static function tearDownAfterClass(): void

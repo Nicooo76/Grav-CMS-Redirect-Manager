@@ -35,6 +35,12 @@ final class StatsStore
 {
     public const ID_PATTERN = '/^[A-Za-z0-9._:-]{1,128}$/';
 
+    /** Seconds a stats.json must be old before all() keeps its decoded content (see all()). */
+    private const MEMO_AFTER = 2;
+
+    /** @var array{signature: array{int, int, int}, rules: array<string, RuleStats>}|null */
+    private ?array $memo = null;
+
     public function __construct(
         private readonly string $statsFile,
         private readonly string $hitsDir,
@@ -50,6 +56,8 @@ final class StatsStore
      */
     public function aggregate(): int
     {
+        $this->memo = null;
+
         return AtomicFile::withLock($this->lockPath(), fn (): int => $this->aggregateLocked());
     }
 
@@ -58,13 +66,28 @@ final class StatsStore
         return $this->all()[$ruleId] ?? new RuleStats();
     }
 
-    /** @return array<string, RuleStats> */
+    /**
+     * Statistics of every rule. Building them means decoding stats.json (about 30 ms for 3,000 rules with a month of
+     * daily buckets) and one list request asks several times, so the result is kept for as long as the file is
+     * unchanged (same modification time, size and inode). A file written within the last two seconds is not kept:
+     * the modification time has a resolution of one second, so an edit in the same second would go unnoticed.
+     *
+     * @return array<string, RuleStats>
+     */
     public function all(): array
     {
+        clearstatcache(true, $this->statsFile);
+        $stat = @stat($this->statsFile);
+        $signature = $stat === false ? null : [$stat['mtime'], $stat['size'], $stat['ino']];
+        if ($signature !== null && $this->memo !== null && $this->memo['signature'] === $signature) {
+            return $this->memo['rules'];
+        }
+
         $result = [];
         foreach ($this->load()['rules'] as $id => $rule) {
             $result[(string) $id] = $this->toRuleStats($rule);
         }
+        $this->memo = $signature !== null && time() - $signature[0] > self::MEMO_AFTER ? ['signature' => $signature, 'rules' => $result] : null;
 
         return $result;
     }
@@ -131,6 +154,7 @@ final class StatsStore
         if ($ids === []) {
             return;
         }
+        $this->memo = null;
         AtomicFile::withLock($this->lockPath(), function () use ($ids): void {
             $state = $this->load(true);
             $before = count($state['rules']);

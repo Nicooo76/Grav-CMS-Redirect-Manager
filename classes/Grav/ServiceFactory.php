@@ -28,6 +28,7 @@ use Grav\Plugin\RedirectManager\Stats\HitRecorder;
 use Grav\Plugin\RedirectManager\Stats\StatsStore;
 use Grav\Plugin\RedirectManager\Storage\CompiledRuleCache;
 use Grav\Plugin\RedirectManager\Storage\DataDirProtection;
+use Grav\Plugin\RedirectManager\Storage\ParsedRulesCache;
 use Grav\Plugin\RedirectManager\Storage\RuleRepository;
 use Grav\Plugin\RedirectManager\Suggest\PageIndex;
 use Grav\Plugin\RedirectManager\Suggest\SuggestionStore;
@@ -171,7 +172,14 @@ final class ServiceFactory
     {
         $this->protectDataDir();
         /** @var RuleRepository */
-        return $this->instances[__FUNCTION__] ??= new RuleRepository($this->dataDir, $this->clock());
+        return $this->instances[__FUNCTION__] ??= new RuleRepository($this->dataDir, $this->clock(), $this->parsedRules());
+    }
+
+    /** Parsed rows of rules.yaml, keyed by content hash (see ParsedRulesCache). */
+    public function parsedRules(): ParsedRulesCache
+    {
+        /** @var ParsedRulesCache */
+        return $this->instances[__FUNCTION__] ??= new ParsedRulesCache($this->cacheDir, $this->dataDir . '/' . RuleRepository::FILE);
     }
 
     public function compiledCache(): CompiledRuleCache
@@ -183,6 +191,7 @@ final class ServiceFactory
             $this->dataDir . '/' . RuleRepository::FILE,
             new RuleCompiler(),
             $this->logger,
+            $this->parsedRules(),
         );
     }
 

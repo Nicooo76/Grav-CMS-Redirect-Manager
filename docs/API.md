@@ -8,7 +8,7 @@ Machine-readable description: `docs/openapi.yaml`. MCP tool mapping: `config/mcp
 
 ```json
 {
-  "id": "r0192f3c1a2b4f1e2d3",
+  "id": "r0192f3c1a2b00f8a3c91e7",
   "source": "/old-page", "target": "/new-page", "match_type": "exact", "status": 301,
   "enabled": true, "priority": 0, "target_type": "route",
   "case_sensitive": false, "ignore_trailing_slash": true,
@@ -75,7 +75,7 @@ Machine-readable description: `docs/openapi.yaml`. MCP tool mapping: `config/mcp
 |---|---|---|---|
 | GET | `/redirects/import/formats` | read | Supported formats with import/export flags. |
 | POST | `/redirects/import/preview` | manage | Body `{content, filename?, format?, options?}` (content as text, max `import.max_mb` MB, 413 above; `encoding: base64` for binary safe transport). Returns `ImportPreview` (rows with line, rule, errors, warnings, duplicate flags; counts). |
-| POST | `/redirects/import/commit` | manage | Same body plus `{skip_duplicates, skip_invalid, lines?}`. Returns `{created, skipped, rules}`. Crawler exports create 404 candidates and suggestions instead of rules. |
+| POST | `/redirects/import/commit` | manage | Same body plus `{skip_duplicates, skip_invalid, lines?}`. Returns `{created, skipped, rules}`. Crawler exports create 404 candidates and suggestions instead of rules. A file-level error (`empty_file`, `invalid_json`, `no_directives` for an `.htaccess` or nginx file without any directive of that format, ...) is a 422 with field `content`; the preview returns the same errors as data. |
 | POST | `/redirects/import/sitemap` | manage | Body `{content}` (old sitemap XML, optionally base64 gzip via `encoding: base64`). Returns the diff and creates suggestions for missing paths. |
 | GET | `/redirects/export` | read | Query `format`, `only_enabled`, `group`, `status`, `host`, `ids` (comma separated rule ids: only these rules; unknown ids are ignored; a blank `ids=` is no filter, any other value that matches nothing exports nothing; combines with the other filters). Returns `{filename, mime, content, skipped}`. |
 | GET | `/redirects/site-config` | read | Grav's own `site.redirects`, `site.routes` and `system.pages.redirect_*` settings, read-only. |
@@ -93,6 +93,9 @@ Machine-readable description: `docs/openapi.yaml`. MCP tool mapping: `config/mcp
 | POST | `/redirects/pending/{id}/resolve` | manage | Body `{action: gone\|parent\|redirect\|dismiss, target?}`. `gone`: 410 for the page and its descendants. `parent`: 301 to the nearest ancestor that exists (home page when there is none). `redirect`: 301 to `target` (route starting with `/`, or an absolute URL that passes the host allowlist); `dismiss`: forget it. The created rules go through `RuleValidator`; an error gives 422 and the decision stays pending. Answers `{id, action, created, updated, deleted, notes}` (rules created and re-targeted, ids of removed rules, skipped items with `kind`). An unknown or already resolved id gives 404. |
 | GET | `/redirects/badge` | read | `{count, unseen, pending}`: `count` is what the Admin 2 sidebar shows (`badgeEndpoint`); it is `null` (JSON null, not 0) when there is nothing to show, so the pill disappears. `unseen` and `pending` are always integers. `unseen` = auto rules the editor has not looked at (only rules that still exist), `pending` = open decisions. |
 | POST | `/redirects/badge/seen` | manage | Clears the unseen auto rules for all users (no body). Answers `{count}` (`null` when 0). |
+| GET | `/redirects/page-context` | read | What the rules say about one page, for the context panel of Admin 2's page editor (see "Page context" below). Query `route` (required, `/blog/news`, no query string) and `lang` (optional). `meta.permissions` as in `/redirects/stats`. 422 for a missing or malformed route. |
+| GET | `/redirects/page-context/badge` | read | `{count}`: unseen automatic rules that point at the page or below it, `null` for none. It is the panel's `badgeEndpoint`; Admin 2 adds `route`, `lang` and `type`. |
+| POST | `/redirects/page-context/seen` | manage | Body `{route, lang?}`. Marks the unseen automatic rules of that page as seen and leaves the others alone. Answers `{cleared, count: null, sidebar}` (`sidebar` is what the sidebar badge shows now, `null` for none). |
 
 ## Events for other plugins
 
@@ -106,6 +109,14 @@ Machine-readable description: `docs/openapi.yaml`. MCP tool mapping: `config/mcp
 ## As built: shapes and details
 
 Where the tables above leave a shape open, this is what the code returns.
+
+**Page context.** `GET /redirects/page-context` answers `{route, language, incoming, incoming_total, created, created_total, unseen, outgoing, pending, not_found, generated_at}`. The route has no language prefix; a trailing slash is ignored, and rules with a language condition that excludes `lang` are left out. Rows are `{id, source, target, match_type, status, target_type, origin, state, languages, note, created_at, unseen, recent, hits, last_hit}` (`recent`: created in the last 24 hours).
+
+- `incoming`: rules that lead to the page: exact rules whose target is the route (case and trailing slash ignored) and wildcard rules `old/*` to `route/$1`. Newest first, at most 50 rows, `incoming_total` counts all.
+- `created`: automatic rules (`origin` auto) whose target is the page or below it and that are unseen or under 24 hours old. `unseen` is the number of unseen ones among them: the toolbar badge. The home page owns only rules that point at `/` itself.
+- `outgoing`: the rule that answers a request for the route with a redirect or a 410/451 before the page is looked up (the tester in phase `early`), as a row plus `location`; `null` when there is none.
+- `pending`: deleted pages below the route that wait for a decision `{id, title, route, children_count, deleted_at}`.
+- `not_found`: 404 hits of the last 30 days (bots not counted) on the exact old URLs of the incoming rules `{path, hits, last_seen}`, most hit first.
 
 **Rules.** `stats.daily`, `query_params` and other empty maps are JSON objects. Lists use `ApiResponse::paginated`: `meta.pagination` (`page`, `per_page`, `total`, `total_pages`) plus the same `total`, `page`, `per_page` at the top of `meta`, and `meta.groups` (list of names), `meta.counts` (per badge, computed over the filtered set without the badge filter itself). The single rule's ETag is an MD5 of the stored fields; `PATCH` and `DELETE` honour `If-Match`. New rules take `redirects.default_status`, else `system.pages.redirect_default_code` (Grav's own default is 302, set it to 301 for permanent redirects by default), else 301. `restore` answers `{restored, rules}`, `reorder` `{affected, rules}`: the listed rules keep their own priority values in the new order (highest to the first id); a tie is broken by lowering each following rule by one; rules that are not listed never change.
 

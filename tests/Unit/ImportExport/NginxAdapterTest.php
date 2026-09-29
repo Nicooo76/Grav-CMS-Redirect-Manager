@@ -24,6 +24,44 @@ final class NginxAdapterTest extends ImportExportTestCase
         return $this->preview($content, Format::Nginx);
     }
 
+    /**
+     * @return iterable<string, array{string}> files that are not an nginx config
+     */
+    public static function notAnNginxConfig(): iterable
+    {
+        yield 'csv' => ["source,target,status\n/old,/new,301\n"];
+        yield 'plain text' => ["hello world\nthis is not a config\n"];
+        yield 'htaccess' => ["Redirect 301 /a /b\nRewriteRule ^x$ /y [R=301]\n"];
+        yield 'unrelated directives only' => ["worker_processes 4;\nevents { worker_connections 1024; }\n"];
+    }
+
+    #[DataProvider('notAnNginxConfig')]
+    public function testAFileWithoutAnyRecognizedDirectiveIsAFileError(string $content): void
+    {
+        $preview = $this->nginx($content);
+
+        self::assertSame(['no_directives'], array_map(static fn ($i) => $i->code, $preview->errors));
+        self::assertSame('nginx', $preview->errors[0]->params['format']);
+        self::assertSame([], $preview->rows);
+    }
+
+    public function testCommentsOnlyAndAnEmptyServerBlockAreNotErrors(): void
+    {
+        foreach (["# only a comment\n\n", "server {\n    listen 80;\n}\n"] as $content) {
+            $preview = $this->nginx($content);
+
+            self::assertSame([], $preview->errors, $content);
+            self::assertSame(['no_rows'], array_map(static fn ($i) => $i->code, $preview->warnings), $content);
+        }
+    }
+
+    public function testADirectiveInsideAnUnknownBlockCountsAsRecognized(): void
+    {
+        $preview = $this->nginx("stream {\n    server {\n        return 301 /x;\n    }\n}\n");
+
+        self::assertSame([], $preview->errors);
+    }
+
     public function testRealisticFile(): void
     {
         $preview = $this->nginx($this->fixture('sample-nginx.conf'));

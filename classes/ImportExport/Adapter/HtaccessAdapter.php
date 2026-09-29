@@ -56,6 +56,8 @@ final class HtaccessAdapter implements ImportAdapter, ExportAdapter
         $conds = [];
         $skipDepth = 0;
         $skipName = '';
+        $lines = 0;
+        $recognized = 0;
 
         foreach (self::logicalLines($content) as $entry) {
             $no = $entry['line'];
@@ -63,11 +65,13 @@ final class HtaccessAdapter implements ImportAdapter, ExportAdapter
             if ($text === '' || $text[0] === '#') {
                 continue;
             }
+            ++$lines;
             if (count($rows) > $options->maxRows) {
                 throw new ImportException(new ImportIssue('too_many_rows', 'The file has more rows than allowed.', ['max' => $options->maxRows]));
             }
 
             if (preg_match('~^<(/?)\s*([A-Za-z]+)~', $text, $m) === 1) {
+                ++$recognized;
                 $name = strtolower($m[2]);
                 $closing = $m[1] === '/';
                 if ($skipDepth > 0) {
@@ -91,12 +95,15 @@ final class HtaccessAdapter implements ImportAdapter, ExportAdapter
             $directive = strtolower((string) array_shift($args));
             switch ($directive) {
                 case 'rewritebase':
+                    ++$recognized;
                     $base = rtrim($args[0] ?? '', '/');
                     break;
                 case 'rewritecond':
+                    ++$recognized;
                     $conds[] = ['line' => $no, 'text' => $text];
                     break;
                 case 'rewriterule':
+                    ++$recognized;
                     $rows[] = $this->rewriteRule($no, $text, $args, $conds, $base, $factory);
                     $conds = [];
                     break;
@@ -104,12 +111,20 @@ final class HtaccessAdapter implements ImportAdapter, ExportAdapter
                 case 'redirectpermanent':
                 case 'redirecttemp':
                 case 'redirectmatch':
+                    ++$recognized;
                     $rows[] = $this->redirect($no, $text, $directive, $args, $factory);
                     break;
+                case 'rewriteengine':
+                    // Part of a rewrite setup, but not a redirect by itself.
+                    ++$recognized;
+                    break;
                 default:
-                    // Everything else (RewriteEngine, Header, ErrorDocument, ...) is not a redirect.
+                    // Everything else (Header, ErrorDocument, ...) is not a redirect.
                     break;
             }
+        }
+        if ($lines > 0 && $recognized === 0) {
+            throw new ImportException(new ImportIssue('no_directives', 'No .htaccess directives were recognized (Redirect, RedirectMatch, RewriteRule). This is probably not an .htaccess file.', ['format' => 'htaccess']));
         }
 
         return $rows;

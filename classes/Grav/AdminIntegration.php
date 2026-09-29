@@ -10,8 +10,8 @@ use Grav\Framework\Acl\PermissionsReader;
 use RocketTheme\Toolbox\Event\Event;
 
 /**
- * What the plugin tells the API plugin and Admin 2: permissions, sidebar entry, page definition, dashboard widget
- * and MCP tools.
+ * What the plugin tells the API plugin and Admin 2: permissions, sidebar entry, page definition, dashboard widget,
+ * the page editor's context panel and MCP tools.
  */
 final class AdminIntegration
 {
@@ -91,6 +91,30 @@ final class AdminIntegration
             'dataEndpoint' => '/redirects/stats',
         ];
         $event['widgets'] = $widgets;
+    }
+
+    /**
+     * The panel in the page editor (admin-next/panels/redirect-manager.js): a toolbar button with a badge for the unseen
+     * automatic redirects of the page that is open. Admin 2 adds `route`, `lang` and `type` to the badge endpoint.
+     */
+    public function contextPanels(Event $event): void
+    {
+        $panels = $event['panels'] ?? [];
+        $panels[] = [
+            'id' => self::SLUG,
+            'plugin' => self::SLUG,
+            // Rendered verbatim as the button's tooltip, so it is translated here.
+            'label' => $this->translated('PLUGIN_REDIRECT_MANAGER.PANEL.LABEL', 'Redirects for this page'),
+            // Lucide name, not a Font Awesome one (the sidebar uses fa-route).
+            'icon' => 'route',
+            'contexts' => ['pages'],
+            'priority' => 10,
+            'width' => 440,
+            'badgeEndpoint' => '/redirects/page-context/badge',
+            // A string, like the dashboard widget: one form every user passes through the same check (super admins skip it).
+            'authorize' => 'api.redirects.read',
+        ];
+        $event['panels'] = $panels;
     }
 
     /**

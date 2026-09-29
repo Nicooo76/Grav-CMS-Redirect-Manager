@@ -7,7 +7,8 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   plugins: [svelte({ hot: false })],
-  resolve: { alias: { $lib: resolve(root, 'src/lib') } },
+  // the browser build of Svelte, so components can be mounted in the tests (src/panel/Panel.test.ts)
+  resolve: { alias: { $lib: resolve(root, 'src/lib') }, conditions: ['browser'] },
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'happy-dom',

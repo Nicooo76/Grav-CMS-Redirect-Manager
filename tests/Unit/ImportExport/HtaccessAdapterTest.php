@@ -22,6 +22,57 @@ final class HtaccessAdapterTest extends ImportExportTestCase
         return $this->preview($content, Format::Htaccess, $options);
     }
 
+    /**
+     * @return iterable<string, array{string}> files that are not an .htaccess
+     */
+    public static function notAnHtaccess(): iterable
+    {
+        yield 'csv' => ["source,target,status\n/old,/new,301\n"];
+        yield 'plain text' => ["hello world\nthis is not a config\n"];
+        yield 'json' => ['{"rules": []}'];
+        yield 'unrelated directives only' => ["Header set X-Frame-Options DENY\nErrorDocument 404 /404.html\n"];
+        yield 'comments and one stray line' => ["# a comment\n\nfoo bar\n"];
+    }
+
+    #[DataProvider('notAnHtaccess')]
+    public function testAFileWithoutAnyRecognizedDirectiveIsAFileError(string $content): void
+    {
+        $preview = $this->htaccess($content);
+
+        self::assertSame(['no_directives'], array_map(static fn ($i) => $i->code, $preview->errors));
+        self::assertSame('htaccess', $preview->errors[0]->params['format']);
+        self::assertSame([], $preview->rows);
+        self::assertTrue($preview->hasFileErrors());
+    }
+
+    /**
+     * @return iterable<string, array{string}> readable configs that only happen to contain no redirect
+     */
+    public static function recognizedButEmpty(): iterable
+    {
+        yield 'only comments' => ["# nothing here\n\n# still nothing\n"];
+        yield 'rewrite engine only' => ["RewriteEngine On\n"];
+        yield 'rewrite base only' => ["RewriteBase /\n"];
+        yield 'an empty block' => ["<IfModule mod_rewrite.c>\n</IfModule>\n"];
+    }
+
+    #[DataProvider('recognizedButEmpty')]
+    public function testARecognizedButRedirectFreeFileIsNotAnError(string $content): void
+    {
+        $preview = $this->htaccess($content);
+
+        self::assertSame([], $preview->errors);
+        self::assertSame(['no_rows'], array_map(static fn ($i) => $i->code, $preview->warnings));
+    }
+
+    public function testOneRecognizedDirectiveAmongUnknownOnesIsEnough(): void
+    {
+        $preview = $this->htaccess("Header set X-A b\nRedirect 301 /a /b\nErrorDocument 404 /x\n");
+
+        self::assertSame([], $preview->errors);
+        self::assertSame(['e:/a=>/b#301 cs strict'], self::sigs($preview));
+    }
+
     public function testRealisticFile(): void
     {
         $preview = $this->htaccess($this->fixture('sample.htaccess'));

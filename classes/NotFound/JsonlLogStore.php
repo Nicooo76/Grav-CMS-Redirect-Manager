@@ -32,6 +32,9 @@ final class JsonlLogStore implements LogStore
     public const DEFAULT_MAX_DAY_BYTES = 10_485_760;
 
     private const MAX_LINE = 65536;
+    /** Bits of a line position (see rows()) that hold the byte offset; the rest is the index of the day file. */
+    private const POSITION_BITS = 40;
+    private const POSITION_MASK = (1 << self::POSITION_BITS) - 1;
     /**
      * A writer starts over only when purge(), deletePath() or rotation replaced the file since it opened it, so it
      * runs out of attempts only when such rewrites follow each other without a break. The limit stops a broken file
@@ -115,16 +118,34 @@ final class JsonlLogStore implements LogStore
 
     public function groups(GroupQuery $q): GroupPage
     {
+        $fromTs = $q->from->getTimestamp();
+        $toTs = $q->to->getTimestamp();
+        $files = $this->dayFiles(DayRange::key($fromTs), DayRange::key($toTs));
+
+        // One pass over the range. Besides the per-path aggregates it remembers, for every accepted line, its path,
+        // its time and where it sits ("positions"), so the totals per day and the details of the paths on the page
+        // come from memory and a few seeks instead of a second pass over 50,000 lines.
         $aggregates = [];
-        foreach ($this->entries($q->from, $q->to) as $entry) {
-            if (!$q->acceptsEntry($entry)) {
+        $pathIds = [];
+        $rowPath = [];
+        $rowTime = [];
+        $rowPos = [];
+        foreach ($this->rows($files, $fromTs, $toTs) as $pos => $row) {
+            if (!$q->acceptsRow($row)) {
                 continue;
             }
-            $t = $entry->time->getTimestamp();
-            $known = $aggregates[$entry->path] ?? null;
-            $aggregates[$entry->path] = $known === null
-                ? [1, $t, $t]
-                : [$known[0] + 1, min($known[1], $t), max($known[2], $t)];
+            $t = $row['t'];
+            $path = $row['p'];
+            $known = $aggregates[$path] ?? null;
+            if ($known === null) {
+                $aggregates[$path] = [1, $t, $t];
+                $pathIds[$path] = count($pathIds);
+            } else {
+                $aggregates[$path] = [$known[0] + 1, min($known[1], $t), max($known[2], $t)];
+            }
+            $rowPath[] = $pathIds[$path];
+            $rowTime[] = $t;
+            $rowPos[] = $pos;
         }
 
         $plan = GroupPlanner::plan($aggregates, $q);
@@ -134,20 +155,63 @@ final class JsonlLogStore implements LogStore
             return new GroupPage([], 0, new GroupTotals(0, 0, $zeroDays));
         }
 
-        $onPage = array_flip($plan->page);
-        $details = [];
-        $byDay = $zeroDays;
-        foreach ($this->entries($q->from, $q->to) as $entry) {
-            if (!isset($plan->visible[$entry->path]) || !$q->acceptsEntry($entry)) {
+        if ($q->aggregatesOnly) {
+            $rows = [];
+            foreach ($plan->page as $path) {
+                $rows[] = (new GroupDetail())->toRow($path, $plan->visible[$path], $zeroDays);
+            }
+
+            return new GroupPage($rows, count($plan->visible), new GroupTotals($plan->hits, count($plan->visible), $zeroDays));
+        }
+
+        $visibleIds = [];
+        foreach ($plan->visible as $path => $_) {
+            $visibleIds[$pathIds[(string) $path]] = true;
+        }
+        $pageIds = [];
+        foreach ($plan->page as $path) {
+            $pageIds[$pathIds[$path]] = $path;
+        }
+        unset($pathIds);
+
+        $dayCounts = [];
+        $pageRows = [];
+        foreach ($rowPath as $i => $id) {
+            if (!isset($visibleIds[$id])) {
                 continue;
             }
-            $day = DayRange::key($entry->time->getTimestamp());
-            $byDay[$day] = ($byDay[$day] ?? 0) + 1;
-            if (isset($onPage[$entry->path])) {
-                ($details[$entry->path] ??= new GroupDetail())->add($entry);
+            $day = intdiv($rowTime[$i], 86400);
+            $dayCounts[$day] = ($dayCounts[$day] ?? 0) + 1;
+            if (isset($pageIds[$id])) {
+                $pageRows[] = $i;
             }
         }
+        $byDay = $zeroDays;
+        foreach ($dayCounts as $day => $count) {
+            $key = DayRange::key($day * 86400);
+            $byDay[$key] = ($byDay[$key] ?? 0) + $count;
+        }
         ksort($byDay);
+
+        // Only the entries of the paths on this page become objects, read back by position.
+        $details = [];
+        $handles = [];
+        try {
+            foreach ($pageRows as $i) {
+                $path = $pageIds[$rowPath[$i]];
+                $row = $this->readAt($handles, $files, $rowPos[$i]);
+                // A purge or a rewrite between the pass and now moved the line: skip what is not the same entry.
+                if ($row !== null && $row['p'] === $path && $row['t'] === $rowTime[$i]) {
+                    ($details[$path] ??= new GroupDetail())->add(NotFoundEntry::fromArray($row));
+                }
+            }
+        } finally {
+            foreach ($handles as $handle) {
+                if (is_resource($handle)) {
+                    fclose($handle);
+                }
+            }
+        }
 
         $rows = [];
         foreach ($plan->page as $path) {
@@ -157,14 +221,39 @@ final class JsonlLogStore implements LogStore
         return new GroupPage($rows, count($plan->visible), new GroupTotals($plan->hits, count($plan->visible), $byDay));
     }
 
+    /**
+     * The decoded line at a position of rows(), or null when the file or the line is gone.
+     *
+     * @param array<int, resource|null> $handles open files by index, filled on demand
+     * @param list<string>              $files
+     *
+     * @return (array{t: int, p: string}&array<mixed>)|null
+     */
+    private function readAt(array &$handles, array $files, int $position): ?array
+    {
+        $index = $position >> self::POSITION_BITS;
+        if (!array_key_exists($index, $handles)) {
+            $handles[$index] = isset($files[$index]) ? (@fopen($files[$index], 'rb') ?: null) : null;
+        }
+        $handle = $handles[$index];
+        if ($handle === null || fseek($handle, $position & self::POSITION_MASK) !== 0) {
+            return null;
+        }
+        $line = fgets($handle, self::MAX_LINE);
+        $row = is_string($line) ? json_decode($line, true, 8) : null;
+
+        return is_array($row) && is_int($row['t'] ?? null) && is_string($row['p'] ?? null) ? $row : null;
+    }
+
     public function countsByDay(DateTimeImmutable $from, DateTimeImmutable $to, bool $includeBots): array
     {
         $counts = DayRange::zeroFilled($from, $to);
-        foreach ($this->entries($from, $to) as $entry) {
-            if (!$includeBots && $entry->uaClass === UserAgentClass::Bot) {
+        $files = $this->dayFiles(DayRange::key($from->getTimestamp()), DayRange::key($to->getTimestamp()));
+        foreach ($this->rows($files, $from->getTimestamp(), $to->getTimestamp()) as $row) {
+            if (!$includeBots && ($row['c'] ?? null) === UserAgentClass::Bot->value) {
                 continue;
             }
-            $day = DayRange::key($entry->time->getTimestamp());
+            $day = DayRange::key($row['t']);
             $counts[$day] = ($counts[$day] ?? 0) + 1;
         }
         ksort($counts);
@@ -305,6 +394,56 @@ final class JsonlLogStore implements LogStore
         $open = fstat($handle);
 
         return $onDisk !== false && $open !== false && $onDisk['ino'] === $open['ino'] && $onDisk['dev'] === $open['dev'];
+    }
+
+    /**
+     * Decoded lines (keys as in NotFoundEntry::toArray()) of the given day files whose time lies in [$fromTs, $toTs].
+     * The fast path for aggregations: no NotFoundEntry objects. The key of every row is its position:
+     * (index in $files << POSITION_BITS) | byte offset of the line.
+     *
+     * @param list<string> $files
+     *
+     * @return Generator<int, array{t: int, p: string}&array<mixed>>
+     */
+    private function rows(array $files, int $fromTs, int $toTs): Generator
+    {
+        foreach ($files as $index => $file) {
+            $handle = @fopen($file, 'rb');
+            if ($handle === false) {
+                continue;
+            }
+            try {
+                // lines() and decodeRow() inlined: this loop runs once per logged entry and two generator layers cost
+                // about as much as the JSON decoding itself.
+                $skipping = false;
+                $offset = 0;
+                while (($line = fgets($handle, self::MAX_LINE)) !== false) {
+                    $start = $offset;
+                    $offset += strlen($line);
+                    $complete = $line[strlen($line) - 1] === "\n";
+                    if ($skipping) {
+                        $skipping = !$complete;
+                        continue;
+                    }
+                    if (!$complete && !feof($handle)) {
+                        $skipping = true;
+                        continue;
+                    }
+                    if ($line[0] !== '{') {
+                        continue;
+                    }
+                    $row = json_decode($line, true, 8);
+                    if (!is_array($row) || !is_int($row['t'] ?? null) || !is_string($row['p'] ?? null)) {
+                        continue;
+                    }
+                    if ($row['t'] >= $fromTs && $row['t'] <= $toTs) {
+                        yield ($index << self::POSITION_BITS) | $start => $row;
+                    }
+                }
+            } finally {
+                fclose($handle);
+            }
+        }
     }
 
     /** @return Generator<int, NotFoundEntry> */

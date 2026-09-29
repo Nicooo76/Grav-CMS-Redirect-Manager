@@ -76,3 +76,34 @@ RM_PORT_RANGE=8500-8599 vendor/bin/phpunit --testsuite integration --group bench
 ```
 
 That test (10,000 rules, 400 requests) reported a median of 270 to 390 µs and a p95 of 380 to 510 µs on PHP 8.3 to 8.5 on the same machine. The unit benchmark (`tests/Unit/Matching/MatcherBenchmarkTest.php`) measures the matcher alone, without Grav: about 10 µs per match.
+
+## Admin API at realistic sizes
+
+The frontend path above is one `include` and a match. The admin screens read more: the rule list, the dashboard, the 404 monitor and the suggestions. `tests/Integration/ApiPerformanceTest.php` (group `benchmark`) measures them over HTTP against a real Grav 2.2.2 with OPcache for the CLI server: 10,000 rules (85 % exact, 10 % wildcard, 5 % regex), statistics for a third of the rules (45 days of daily buckets), 50,000 404 entries over 30 days on 8,000 paths, 5,000 suggestions. Each figure is the wall-clock time of a whole request, including Grav's boot and the token check, after two warm-up requests. That is an upper bound of the server time. The test fails when the fastest of five requests exceeds 200 ms for a page of 50 rules or 300 ms for any other endpoint. It reports the median next to it.
+
+```
+RM_PORT_RANGE=8500-8599 vendor/bin/phpunit --testsuite integration --filter ApiPerformanceTest
+```
+
+| Request | Before | After |
+|---|---:|---:|
+| `GET /redirects/rules` (page of 50, default sort) | about 0.93 s | 0.15 s |
+| `GET /redirects/rules` sorted by source, searched, filtered | about 0.83 to 0.97 s | 0.12 s |
+| `GET /redirects/stats` | 0.31 s | 0.18 s |
+| `GET /redirects/404` (30 days, 50 rows) | 5.0 s | 0.17 s |
+| `GET /redirects/404` (30 days, bots included, 100 rows) | 9.5 s | 0.15 s |
+| `GET /redirects/404?q=page-12` | 4.8 s | 0.12 s |
+| `GET /redirects/404/trend` | 0.20 s | 0.08 s |
+| `GET /redirects/suggestions` | 0.52 s | 0.15 s |
+| `POST /redirects/import/commit`, 10,000 CSV rows | 0.8 s | 0.8 s (median of 20 runs, maximum 1.0 s) |
+
+The "before" column was measured in one PHP process without HTTP (`RedirectService` called directly, PHP 8.5, no OPcache, same data), so it leaves out about 30 ms of Grav boot that the "after" column includes. The user-visible rule list took about 1.1 s. Apple M3 Max, other jobs running.
+
+What was slow, and what changed:
+
+- **Parsing `rules.yaml` took 0.75 s of the 0.93 s.** Symfony YAML needs about 75 microseconds per rule, and every API request parsed the file again. The parsed rows now live in `cache://redirect-manager/parsed-rules-<hash>.php`, keyed by the SHA-1 of the file content, so the cache cannot be stale (a hand edit changes the hash and the file is parsed once more). Every save writes the rows through, so the request after an edit finds the cache warm. The compiled rule set for the frontend reads the same cache when it rebuilds. Reading 10,000 rules from the cache costs about 25 ms for the rows plus 50 ms for the `Rule` objects. The dashboard only needs counts and reads the rows without objects.
+- **Sorting used `usort()` with a callback, 130,000 calls at 10,000 rules.** It now sorts plain columns with `array_multisort()`. The order is the same for every sort and direction (a test compares all of them with the old comparator on random rules).
+- **The 404 log was read twice as objects, and once more per row.** `NotFoundService::groups()` asked `RuleService::all()` for every one of the 50 rows whether any rule exists (50 times the 0.1 s hydration: about 4.5 s of the 5 s). It asks once, and only counts the stored rows. The JSONL store now decodes each line once into an array, never builds a `NotFoundEntry` for lines it only counts, remembers the position of every accepted line and reads the entries of the 50 paths on the page back by position instead of a second pass. Suggestions use the aggregates only and skip the details.
+- **`stats.json` was decoded three times per rule list** (aggregation, statistics, unused rules). The decoded result is now kept while the file is unchanged.
+- The analysis of all rules (chains, loops, conflicts, about 0.5 s at 10,000 rules) was already cached per file revision and is hit: a rule list after the first one takes 0.1 s of it. The first request after a change to `rules.yaml` still computes it, so the first list after an edit takes about 0.6 s. The tests warm it first.
+

@@ -7,6 +7,7 @@ namespace Grav\Plugin\RedirectManager\Tests\Unit\App;
 use Grav\Plugin\RedirectManager\App\RedirectService;
 use Grav\Plugin\RedirectManager\App\SiteContext;
 use Grav\Plugin\RedirectManager\Domain\Rule;
+use Grav\Plugin\RedirectManager\Storage\RuleRepository;
 use Grav\Plugin\RedirectManager\Tests\Unit\App\Support\AppTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -105,5 +106,19 @@ final class RedirectServiceTest extends AppTestCase
         $this->app->rebuildCache();
 
         self::assertSame([], glob($dir . '/analysis-*.php'));
+    }
+
+    public function testRebuildCacheHealsAWrongParsedRulesCache(): void
+    {
+        $this->seedRules([['id' => 'r1', 'source' => '/a', 'target' => '/b']]);
+        $services = $this->app->services();
+        $hash = RuleRepository::hashContent((string) file_get_contents($services->repository()->file()));
+        // Rows that do not belong to the file, stored under its hash (a bug or a half-written upgrade).
+        $services->parsedRules()->store($hash, [['id' => 'wrong', 'source' => '/x', 'target' => '/y']]);
+        self::assertSame(['wrong'], array_map(static fn (Rule $r): string => $r->id, $services->repository()->all()));
+
+        self::assertSame(1, $this->app->rebuildCache());
+
+        self::assertSame(['r1'], array_map(static fn (Rule $r): string => $r->id, $services->repository()->all()));
     }
 }

@@ -433,7 +433,7 @@ final class ImporterTest extends ImportExportTestCase
             self::assertSame(302, $rule->status->value);
             self::assertSame(RuleSource::Suggestion, $rule->origin);
             self::assertSame('2026-09-29T10:00:00+00:00', $rule->createdAt?->format(Rule::DATE_FORMAT));
-            self::assertMatchesRegularExpression('/^r[0-9a-f]{17}$/', $rule->id);
+            self::assertMatchesRegularExpression('/^r[0-9a-f]{22}$/', $rule->id);
         }
         $ids = array_map(static fn (Rule $r): string => $r->id, $rules);
         $sorted = $ids;

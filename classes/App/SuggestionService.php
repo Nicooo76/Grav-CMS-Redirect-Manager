@@ -477,6 +477,7 @@ final class SuggestionService
             includeBots: true,
             sort: GroupSort::Hits,
             perPage: GroupQuery::MAX_PER_PAGE,
+            aggregatesOnly: true,
         ));
         $hits = [];
         foreach ($page->rows as $row) {

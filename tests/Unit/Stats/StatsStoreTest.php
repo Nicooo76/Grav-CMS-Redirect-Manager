@@ -65,6 +65,93 @@ final class StatsStoreTest extends TestCase
         return json_decode((string) file_get_contents($this->statsFile), true, 512, JSON_THROW_ON_ERROR);
     }
 
+    // ---------------------------------------------------------------- all(): kept while the file is unchanged
+
+    private function writeStats(string $id, int $total): void
+    {
+        if (!is_dir(dirname($this->statsFile))) {
+            mkdir(dirname($this->statsFile), 0775, true);
+        }
+        file_put_contents($this->statsFile, json_encode(['version' => 1, 'rules' => [$id => ['total' => $total, 'last_hit' => null, 'daily' => new \stdClass()]], 'processed' => []]));
+    }
+
+    public function testAllIsKeptWhileTheOldFileIsUnchanged(): void
+    {
+        $this->writeStats('a', 3);
+        touch($this->statsFile, time() - 60);
+        $store = $this->store();
+
+        $first = $store->all();
+        // Same size, same inode (rewritten in place), same modification time: the file looks unchanged.
+        $size = strlen((string) file_get_contents($this->statsFile));
+        $handle = fopen($this->statsFile, 'r+b');
+        self::assertIsResource($handle);
+        fwrite($handle, str_replace('"total":3', '"total":4', (string) file_get_contents($this->statsFile)));
+        fclose($handle);
+        touch($this->statsFile, time() - 60);
+        clearstatcache();
+        self::assertSame($size, strlen((string) file_get_contents($this->statsFile)));
+
+        self::assertSame(3, $first['a']->total);
+        self::assertSame($first, $store->all(), 'the memo answers, the file is not decoded again');
+        self::assertSame(4, $this->store()->all()['a']->total, 'a new instance reads the file');
+    }
+
+    public function testAllReadsAgainWhenTheFileChanged(): void
+    {
+        $this->writeStats('a', 3);
+        touch($this->statsFile, time() - 60);
+        $store = $this->store();
+        self::assertSame(3, $store->all()['a']->total);
+
+        $this->writeStats('a', 30);
+        touch($this->statsFile, time() - 30);
+
+        self::assertSame(30, $store->all()['a']->total);
+    }
+
+    public function testAFileWrittenAMomentAgoIsNeverKept(): void
+    {
+        $this->writeStats('a', 3);
+        $store = $this->store();
+        self::assertSame(3, $store->all()['a']->total);
+
+        // Same second, so the modification time cannot tell the two versions apart.
+        $mtime = filemtime($this->statsFile);
+        $this->writeStats('a', 9);
+        touch($this->statsFile, (int) $mtime);
+        clearstatcache();
+
+        self::assertSame(9, $store->all()['a']->total);
+    }
+
+    public function testAggregateAndForgetDropTheKeptResult(): void
+    {
+        $this->writeStats('a', 3);
+        touch($this->statsFile, time() - 60);
+        $store = $this->store();
+        self::assertSame(3, $store->all()['a']->total);
+
+        $this->hitFile('2026-09-29', 'a', 'a');
+        $store->aggregate();
+        self::assertSame(5, $store->all()['a']->total);
+
+        touch($this->statsFile, time() - 60);
+        self::assertSame(5, $store->all()['a']->total);
+        $store->forget(['a']);
+        self::assertSame([], $store->all());
+    }
+
+    public function testAMissingFileIsAnEmptyResultThatIsNotKept(): void
+    {
+        $store = $this->store();
+        self::assertSame([], $store->all());
+
+        $this->writeStats('a', 1);
+
+        self::assertSame(1, $store->all()['a']->total);
+    }
+
     public function testAggregateWithoutHitsDoesNothing(): void
     {
         self::assertSame(0, $this->store()->aggregate());

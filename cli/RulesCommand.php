@@ -18,7 +18,7 @@ class RulesCommand extends ConsoleCommand
         $this
             ->setName('rules')
             ->setAliases(['redirects:list'])
-            ->setDescription('List redirect rules (named "rules" because "list" is reserved by Symfony; alias redirects:list)')
+            ->setDescription('List redirect rules (named "rules" because "list" would replace the command overview; alias redirects:list)')
             ->addOption('q', null, InputOption::VALUE_REQUIRED, 'Search in source, target, note, group and tags')
             ->addOption('match-type', null, InputOption::VALUE_REQUIRED, 'exact, wildcard or regex')
             ->addOption('status', null, InputOption::VALUE_REQUIRED, 'Only rules with this HTTP status')
@@ -33,7 +33,7 @@ class RulesCommand extends ConsoleCommand
             ->addOption('page', null, InputOption::VALUE_REQUIRED, 'Page number', '1')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Print {"data": [...], "meta": {...}} as JSON')
             ->setHelp(<<<'HELP'
-The <info>rules</info> command lists the redirect rules (Symfony reserves the name "list", so the alias <info>redirects:list</info> is the long form).
+The <info>rules</info> command lists the redirect rules. It is not called "list" because that name would replace the built-in command overview of <info>bin/plugin redirect-manager</info>. The alias <info>redirects:list</info> is the long form.
 
   <info>bin/plugin redirect-manager rules --q=shop --state=active --limit=20</info>
   <info>bin/plugin redirect-manager rules --badge=loop --json</info>

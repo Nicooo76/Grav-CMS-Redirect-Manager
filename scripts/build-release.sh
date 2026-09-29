@@ -10,7 +10,7 @@
 #   1. <version> is semver, blueprints.yaml `version:` equals it, CHANGELOG.md has a section for it ("# v<version>", see scripts/changelog-section.sh)
 #   2. composer validate --strict
 #   3. the admin-next bundles and languages.yaml are up to date: `npm run build` of admin2 (which also compiles
-#      the UI strings into ../languages.yaml) runs in a temp copy, never in place, and the sha256 of both bundles
+#      the UI strings into ../languages.yaml) runs in a temp copy, never in place, and the sha256 of the three bundles
 #      and of languages.yaml is compared with the committed files. --no-bundle-check skips this (not for releases).
 #   4. staging tree: runtime files only, vendor/ from `composer install --no-dev --classmap-authoritative`
 #   5. the ZIP has no forbidden paths, no root *.yaml besides blueprints/languages/redirect-manager (GPM package name),
@@ -23,7 +23,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PHP_BIN="${RM_PHP_BIN:-php}"
 SLUG="redirect-manager"
-BUNDLES="pages/redirect-manager.js widgets/redirect-manager.js"
+BUNDLES="pages/redirect-manager.js widgets/redirect-manager.js panels/redirect-manager.js"
 
 VERSION=""
 CHECK_BUNDLES=1
@@ -74,7 +74,7 @@ if [ "$CHECK_BUNDLES" = "1" ]; then
     step "admin-next bundles and languages.yaml are up to date"
     command -v node >/dev/null 2>&1 || fail "node is needed to rebuild admin2 (or pass --no-bundle-check)."
     B="$WORK/bundles"
-    mkdir -p "$B/admin2" "$B/admin-next/pages" "$B/admin-next/widgets"
+    mkdir -p "$B/admin2" "$B/admin-next/pages" "$B/admin-next/widgets" "$B/admin-next/panels"
     # vite writes to ../admin-next and the i18n step to ../languages.yaml, both relative to admin2/, so a copy next
     # to a scratch admin-next and a scratch languages.yaml keeps the working tree untouched.
     cp "$ROOT/languages.yaml" "$B/languages.yaml"
@@ -226,7 +226,7 @@ if [ -n "$root_yaml" ]; then
     printf '%s\n' "$root_yaml" | sed 's/^/  /' >&2
     bad=1
 fi
-for must in redirect-manager.php redirect-manager.yaml blueprints.yaml languages.yaml config/permissions.yaml config/mcp.yaml README.md CHANGELOG.md LICENSE admin-next/pages/redirect-manager.js admin-next/widgets/redirect-manager.js; do
+for must in redirect-manager.php redirect-manager.yaml blueprints.yaml languages.yaml config/permissions.yaml config/mcp.yaml README.md CHANGELOG.md LICENSE admin-next/pages/redirect-manager.js admin-next/widgets/redirect-manager.js admin-next/panels/redirect-manager.js; do
     grep -q "^$SLUG/$must$" "$ENTRIES" || { echo "missing in the ZIP: $must" >&2; bad=1; }
 done
 [ "$bad" = "0" ] || fail "the ZIP content check failed."

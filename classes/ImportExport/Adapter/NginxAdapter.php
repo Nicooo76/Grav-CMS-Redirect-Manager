@@ -51,11 +51,46 @@ final class NginxAdapter implements ImportAdapter, ExportAdapter
     public function parse(string $content, ImportOptions $options): array
     {
         $nodes = NginxConfig::parse($content);
+        if (self::hasCode($content) && !self::recognizes($nodes)) {
+            throw new ImportException(new ImportIssue('no_directives', 'No nginx directives were recognized (server, location, return, rewrite). This is probably not an nginx config.', ['format' => 'nginx']));
+        }
         $factory = new RowFactory($options, $this->clock);
         $rows = [];
         $this->walk($nodes, ['hosts' => [], 'conds' => [], 'location' => null, 'unsupported' => null], $factory, $rows, $options);
 
         return $rows;
+    }
+
+    /** True when the text has a line that is neither blank nor a comment. */
+    private static function hasCode(string $content): bool
+    {
+        foreach (explode("\n", $content) as $line) {
+            $line = trim($line);
+            if ($line !== '' && $line[0] !== '#') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether any directive of the config, at any depth, is one this adapter reads or reports.
+     *
+     * @param list<NginxNode> $nodes
+     */
+    private static function recognizes(array $nodes): bool
+    {
+        foreach ($nodes as $node) {
+            if (in_array($node->name, ['return', 'rewrite', 'location', 'if', 'server', 'http'], true) || in_array($node->name, self::REPORTED, true)) {
+                return true;
+            }
+            if ($node->children !== null && self::recognizes($node->children)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

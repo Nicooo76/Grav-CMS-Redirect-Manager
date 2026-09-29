@@ -9,6 +9,10 @@ declare global {
     __GRAV_ADMIN_BASE?: string;
     __GRAV_PAGE_TAG?: string;
     __GRAV_WIDGET_TAG?: string;
+    __GRAV_PANEL_TAG?: string;
+    /** Page editor context (only set while a page is open there). */
+    __GRAV_PAGE_ROUTE?: string;
+    __GRAV_CONTENT_LANG?: string;
     __GRAV_NAVIGATE?: (url: string, opts?: Record<string, unknown>) => void;
     __GRAV_I18N?: {
       t(key: string, params?: Record<string, unknown>): string;

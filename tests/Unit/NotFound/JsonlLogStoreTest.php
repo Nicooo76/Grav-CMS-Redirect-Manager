@@ -73,6 +73,105 @@ final class JsonlLogStoreTest extends LogStoreContract
         return $names;
     }
 
+    public function testDetailsOfThePageComeFromTheRightLinesAcrossFilesWithBrokenLinesBetween(): void
+    {
+        $this->add('/a', self::day(-3), 'https://r.example/1', query: 'old=1');
+        $this->add('/noise', self::day(-3, 5));
+        $this->add('/a', self::day(-2), 'https://r.example/2', language: 'en');
+        $this->add('/noise', self::day(-2, 5));
+        $this->add('/a', 0, 'https://r.example/2', UserAgentClass::Bot, query: 'latest=9');
+        $this->add('/noise', 6);
+        // Broken lines shift every later offset: a partial line, garbage, a JSON list and an entry without a path.
+        foreach ([self::day(-3), self::day(-2), 0] as $offset) {
+            $file = $this->dayFile(gmdate('Y-m-d', self::NOW + $offset));
+            $good = (string) file_get_contents($file);
+            file_put_contents($file, "not json at all\n[1,2]\n{\"t\":1}\n" . $good . "{\"t\":12,\"p\":\"/cut");
+        }
+
+        $page = $this->store->groups($this->query(['search' => 'a', 'perPage' => 1, 'sort' => GroupSort::Path, 'direction' => SortDirection::Asc]));
+
+        self::assertSame(['/a'], array_map(static fn ($r) => $r->path, $page->rows));
+        $row = $page->rows[0];
+        self::assertSame(3, $row->hits);
+        self::assertSame(['https://r.example/2' => 2, 'https://r.example/1' => 1], $row->topReferers);
+        self::assertSame(['browser' => 2, 'bot' => 1], $row->uaBreakdown);
+        self::assertSame('latest=9', $row->sampleQuery);
+        self::assertSame(['de' => 2, 'en' => 1], $row->languages);
+    }
+
+    public function testReadingBackAPositionThatIsGoneGivesNothing(): void
+    {
+        $this->add('/a', 0);
+        $file = $this->dayFile(gmdate('Y-m-d', self::NOW));
+        $read = new \ReflectionMethod(JsonlLogStore::class, 'readAt');
+        $handles = [];
+
+        $first = $read->invokeArgs($this->jsonl(), [&$handles, [$file], 0]);
+        self::assertSame('/a', $first['p'] ?? null, 'position 0 of file 0 is the first line');
+        // Mid-line (a purge moved the content), past the end, a file index that does not exist.
+        self::assertNull($read->invokeArgs($this->jsonl(), [&$handles, [$file], 7]));
+        self::assertNull($read->invokeArgs($this->jsonl(), [&$handles, [$file], 100000]));
+        self::assertNull($read->invokeArgs($this->jsonl(), [&$handles, [$file], 5 << 40]));
+        $none = [];
+        self::assertNull($read->invokeArgs($this->jsonl(), [&$none, [$this->tmp . '/missing.jsonl'], 0]));
+        foreach ($handles as $handle) {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+        }
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>}> GroupQuery constructor overrides
+     */
+    public static function rowFilters(): iterable
+    {
+        yield 'defaults (no bots)' => [['includeBots' => false]];
+        yield 'bots included' => [['includeBots' => true]];
+        yield 'only browsers' => [['uaClasses' => [UserAgentClass::Browser]]];
+        yield 'bots and unknown' => [['includeBots' => true, 'uaClasses' => [UserAgentClass::Bot, UserAgentClass::Unknown]]];
+        yield 'language de' => [['language' => 'de']];
+        yield 'language en' => [['language' => 'en']];
+        yield 'host a' => [['host' => 'a.example']];
+        yield 'host and language' => [['host' => 'b.example', 'language' => 'en', 'includeBots' => true]];
+    }
+
+    /**
+     * @param array<string, mixed> $overrides
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('rowFilters')]
+    public function testTheRawRowFilterAcceptsExactlyWhatTheEntryFilterAccepts(array $overrides): void
+    {
+        $classes = [UserAgentClass::Browser, UserAgentClass::Bot, UserAgentClass::Monitoring, UserAgentClass::Unknown];
+        $q = $this->query($overrides);
+        $times = [-5000000, self::day(-6), self::day(-6) - 1, self::day(-3), 0, self::day(0, 3600), self::day(0, 3601), 99999999];
+        foreach ($times as $offset) {
+            foreach ($classes as $class) {
+                foreach ([null, 'de', 'en'] as $language) {
+                    foreach (['a.example', 'b.example', ''] as $host) {
+                        $entry = new NotFoundEntry(self::at($offset), '/p', '', '', '', $class, null, $language, $host);
+                        $row = $entry->toArray();
+
+                        self::assertSame($q->acceptsEntry($entry), $q->acceptsRow($row), sprintf('%d %s %s %s', $offset, $class->value, $language ?? '-', $host));
+                    }
+                }
+            }
+        }
+    }
+
+    public function testTheRawRowFilterHandlesRowsWithMissingOrOddFields(): void
+    {
+        $q = $this->query(['includeBots' => false, 'uaClasses' => [UserAgentClass::Unknown], 'host' => '']);
+        $t = self::NOW - 100;
+
+        self::assertFalse($q->acceptsRow([]));
+        self::assertFalse($q->acceptsRow(['t' => 'x', 'p' => '/a']));
+        self::assertTrue($q->acceptsRow(['t' => $t, 'p' => '/a']), 'no class means unknown; a missing host equals the empty one');
+        self::assertTrue($q->acceptsRow(['t' => $t, 'p' => '/a', 'c' => 'nonsense', 'h' => ['array']]), 'a class that does not exist reads as unknown, a host that is no string as empty');
+        self::assertFalse($q->acceptsRow(['t' => $t, 'p' => '/a', 'c' => 'bot']));
+        self::assertFalse($q->acceptsRow(['t' => $t, 'p' => '/a', 'c' => 'browser']));
+    }
+
     public function testOneFileAndOneLinePerEntryPerUtcDay(): void
     {
         $this->add('/a', 0);

@@ -75,7 +75,7 @@ Reads the `redirects` and `routes` sections. Admin 2 also has a panel "Grav site
 
 ## Apache .htaccess
 
-Reads `Redirect`, `RedirectPermanent`, `RedirectTemp`, `RedirectMatch` and `RewriteRule` with `RewriteCond`. `<IfModule>`, `<IfDefine>`, `<IfVersion>` and `<VirtualHost>` are read through, every other block is skipped with a warning. Continuation lines with a trailing backslash work.
+Reads `Redirect`, `RedirectPermanent`, `RedirectTemp`, `RedirectMatch` and `RewriteRule` with `RewriteCond`. `<IfModule>`, `<IfDefine>`, `<IfVersion>` and `<VirtualHost>` are read through, every other block is skipped with a warning. Continuation lines with a trailing backslash work. A file in which no line is a redirect or rewrite directive or a block (a CSV, plain text, a file with only `Header` and `ErrorDocument` lines) is a file-level error `no_directives`: the preview shows it, the API answers 422 and the CLI exits with 2. A file with only comments, or only `RewriteEngine On`, imports nothing and gets the warning `no_rows`.
 
 - `Redirect /a /b` becomes an exact rule. Apache also matches everything below `/a`; the importer does not.
 - A `RewriteRule` without the `QSA` flag drops the query string, as the rule says. Apache itself keeps it unless the target ends in `?`.
@@ -86,7 +86,7 @@ Reads `Redirect`, `RedirectPermanent`, `RedirectTemp`, `RedirectMatch` and `Rewr
 
 ## nginx
 
-Reads `location` blocks with `return` or `rewrite`, `if` on host, scheme, header, cookie or query, and server-level domain redirects. Every other directive is ignored. A block that is not closed is an error.
+Reads `location` blocks with `return` or `rewrite`, `if` on host, scheme, header, cookie or query, and server-level domain redirects. Every other directive is ignored. A block that is not closed is an error. A config with none of `server`, `http`, `location`, `if`, `return`, `rewrite` or the directives it reports (`try_files`, `proxy_pass`, `map` and similar) is a file-level error `no_directives`, as for `.htaccess`.
 
 - `return` drops the query string. `rewrite` keeps it unless the target ends in `?`. Imported rules follow that: a `$is_args$args` in a `return` target means the query is passed on.
 - Skipped with a warning: internal rewrites (`last`, `break`), rules inside an unsupported `if`, a server-wide redirect with no host condition (it would redirect every request), targets with nginx variables the plugin does not know, named or empty locations.
@@ -124,10 +124,10 @@ Not a rule format, but the best start for a relaunch. Upload the old `sitemap.xm
 
 ## Export
 
-`GET /redirects/export?format=...`, `bin/plugin redirect-manager export --format=...`, or the export cards in Admin 2. Filters: only enabled rules, one group, status codes, rule ids. The REST route also takes `host`.
+`GET /redirects/export?format=...`, `bin/plugin redirect-manager export --format=...`, or the export cards in Admin 2. Filters: only enabled rules, one group, status codes, rule ids. The REST route takes `host`, the command line `--host`.
 
 - Rules come out in the order the matcher uses: priority, then exact before wildcard before regex, then age.
 - Formats without an enabled flag skip disabled rules and say so. Only CSV, JSON, YAML and both WordPress formats keep disabled rules.
 - A rule that uses `{lang}` in its target is skipped in every format except CSV, JSON and YAML. No other format has a language placeholder.
 - The result has two lists. `skipped` names the rules the format cannot express at all, `lossy` names the rules that were exported but lost a setting. The command line prints both to stderr, or with `--json` returns them.
-- Cloudflare Bulk Redirects needs a host in every source. It takes the host conditions of the rule. For rules without one, pass `host=example.org` to the REST route. Admin 2 and the CLI have no field for it, so rules without a host condition are skipped there with the reason `export_host_required`. Cloudflare takes 301, 302, 307 and 308 only, no regular expressions, no conditions other than host, and wildcards only as a trailing `/*`.
+- Cloudflare Bulk Redirects needs a host in every source. It takes the host conditions of the rule. For rules without one, pass `host=example.org` to the REST route or `--host=example.org` to the CLI. Admin 2 has no field for it, so rules without a host condition are skipped there, and in the CLI or REST route when no host is given, with the reason `export_host_required`. Cloudflare takes 301, 302, 307 and 308 only, no regular expressions, no conditions other than host, and wildcards only as a trailing `/*`.

@@ -9,6 +9,7 @@ use Grav\Plugin\RedirectManager\Api\ApiController;
 use Grav\Plugin\RedirectManager\Api\AutoRedirectController;
 use Grav\Plugin\RedirectManager\Api\ImportExportApiController;
 use Grav\Plugin\RedirectManager\Api\NotFoundApiController;
+use Grav\Plugin\RedirectManager\Api\PageContextApiController;
 use Grav\Plugin\RedirectManager\Api\SuggestionApiController;
 use Grav\Plugin\RedirectManager\Api\SystemApiController;
 
@@ -73,7 +74,7 @@ final class RouteRegistrar
         $routes->get('/redirects/pages', [$system, 'pages']);
     }
 
-    /** /redirects/pending, /redirects/pending/{id}/resolve, /redirects/badge, /redirects/badge/seen. */
+    /** /redirects/pending, /redirects/pending/{id}/resolve, /redirects/badge, /redirects/badge/seen, /redirects/page-context (+ /badge, /seen). */
     /**
      * @param ApiRouteCollector $routes
      */
@@ -85,5 +86,11 @@ final class RouteRegistrar
         $routes->post('/redirects/pending/{id}/resolve', [$auto, 'resolve']);
         $routes->get('/redirects/badge', [$auto, 'badge']);
         $routes->post('/redirects/badge/seen', [$auto, 'badgeSeen']);
+
+        // The context panel in the page editor (a route and a language in, the rules of that page out).
+        $page = PageContextApiController::class;
+        $routes->get('/redirects/page-context', [$page, 'show']);
+        $routes->get('/redirects/page-context/badge', [$page, 'badge']);
+        $routes->post('/redirects/page-context/seen', [$page, 'seen']);
     }
 }

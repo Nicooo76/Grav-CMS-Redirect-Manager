@@ -6,14 +6,14 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('.', import.meta.url));
 
 /**
- * Two builds, one config: `--mode page` and `--mode widget`.
+ * Three builds, one config: `--mode page`, `--mode widget` and `--mode panel`.
  * Each produces exactly one self-contained ES module (no chunks, no external
  * imports, no import.meta.url) because Admin 2 loads plugin UI through a Blob
  * URL import, where relative imports cannot resolve.
  */
 export default defineConfig(({ mode }) => {
-  const widget = mode === 'widget';
-  const out = widget ? 'widgets' : 'pages';
+  const out = mode === 'widget' ? 'widgets' : mode === 'panel' ? 'panels' : 'pages';
+  const entry = mode === 'widget' ? 'src/entries/widget.ts' : mode === 'panel' ? 'src/entries/panel.ts' : 'src/entries/page.ts';
   return {
     plugins: [svelte()],
     define: { 'process.env.NODE_ENV': '"production"' },
@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: false,
       outDir: resolve(root, '../admin-next', out),
       lib: {
-        entry: resolve(root, widget ? 'src/entries/widget.ts' : 'src/entries/page.ts'),
+        entry: resolve(root, entry),
         formats: ['es'],
         fileName: () => 'redirect-manager.js',
       },

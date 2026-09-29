@@ -155,7 +155,13 @@ export async function createAccount(siteDir: string, username: string, password:
   writeFileSync(file, stringify(account));
 }
 
-export async function freePort(min = 8400, max = 8499): Promise<number> {
+/** RM_PORT_RANGE="8600-8699" moves the random choice out of the default range (parallel runs, the dev site). */
+function portRange(): [number, number] {
+  const m = /^(\d{2,5})-(\d{2,5})$/.exec((process.env.RM_PORT_RANGE ?? '').trim());
+  return m && Number(m[1]) <= Number(m[2]) ? [Number(m[1]), Number(m[2])] : [8400, 8499];
+}
+
+export async function freePort(min = portRange()[0], max = portRange()[1]): Promise<number> {
   const preferred = process.env.RM_PORT ? [Number(process.env.RM_PORT)] : [];
   const candidates = [...preferred];
   if (!preferred.length) {

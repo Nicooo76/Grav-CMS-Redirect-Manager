@@ -1,0 +1,8 @@
+parameters:
+    level: 8
+    paths:
+        - classes
+        - cli
+        - redirect-manager.php
+    tmpDir: build/phpstan
+    treatPhpDocTypesAsCertain: false

@@ -1,3 +1,13 @@
+{#
+    Page for a rule with status 451. To change it, copy this file to
+    user/themes/<your-theme>/templates/redirect-manager/unavailable.html.twig: a theme template wins over this one.
+
+    Variables:
+      redirect_status  int     451
+      redirect_path    string  the requested path as the rules see it: no query string, no base path, no language prefix
+    plus Grav's own: site, config, base_url, home_url, html_lang, and the |t filter. Nothing else is passed in.
+    The response carries "X-Robots-Tag: noindex" and "X-Redirect-By: Grav Redirect Manager" whatever the template says.
+#}
 <!DOCTYPE html>
 <html lang="{{ html_lang|default('en') }}">
 <head>

@@ -6,6 +6,7 @@ namespace Grav\Plugin\RedirectManager\Tests\Unit\Support;
 
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamInterface;
+use Psr\Http\Message\UriInterface;
 
 /**
  * A server request for the API controller tests: query string, JSON body (the `json_body` attribute the API plugin's
@@ -25,6 +26,41 @@ final class FakeServerRequest implements ServerRequestInterface
         private readonly array $routeParams = [],
         private readonly array $headers = [],
     ) {
+    }
+
+    public function getMethod(): string
+    {
+        return 'GET';
+    }
+
+    public function getUri(): UriInterface
+    {
+        return new class ($this->query) implements UriInterface {
+            /** @param array<string, mixed> $query */
+            public function __construct(private readonly array $query)
+            {
+            }
+
+            public function getPath(): string
+            {
+                return '/';
+            }
+
+            public function getQuery(): string
+            {
+                return http_build_query($this->query);
+            }
+
+            public function __toString(): string
+            {
+                return '/?' . $this->getQuery();
+            }
+        };
+    }
+
+    public function getCookieParams(): array
+    {
+        return [];
     }
 
     public function getQueryParams(): array

@@ -31,6 +31,22 @@ final class TestSite
     /** @var resource|null */
     private $process = null;
 
+    /** Folder of the site's user/ directory, relative to $dir: "user", or "user/sites/<name>" in a multisite setup. */
+    private string $userRoot = 'user';
+
+    private string $cacheRoot = 'cache';
+
+    private string $tmpRoot = 'tmp';
+
+    /** Host header sent with every request of a site view of a multisite setup. */
+    private ?string $host = null;
+
+    /** @var list<string> site names of a multisite setup (empty: an ordinary site) */
+    private array $sites = [];
+
+    /** A view of one site of a multisite setup: it shares the server with the site it came from and never stops it. */
+    private bool $isView = false;
+
     /**
      * @param array<string, string> $ini php.ini settings for the server process (-d key=value)
      */
@@ -118,6 +134,60 @@ final class TestSite
         return $site;
     }
 
+    /**
+     * A multisite installation: one Grav, one PHP server, one `setup.php` that maps the first label of the Host header
+     * (site-a.test -> site-a) to its own `user/sites/<name>/`, `cache/<name>/` and `tmp/<name>/` (Grav's "multisite
+     * setup"). Every site gets its own config, pages, themes, data and a link to every plugin of the base site.
+     * Use forSite() to get a TestSite that talks to one site (Host header and paths included).
+     *
+     * @param list<string> $names
+     */
+    public static function createMultisite(array $names, array $ini = []): self
+    {
+        $base = self::baseDir();
+        if ($base === null) {
+            throw new RuntimeException('No Grav test site found. Run scripts/setup-test-site.sh first.');
+        }
+        $site = new self($base, $ini);
+        $site->sites = $names;
+        $site->build();
+        $site->start();
+
+        return $site;
+    }
+
+    /**
+     * The site of a multisite setup that answers to <name>.test.
+     */
+    public function forSite(string $name): self
+    {
+        if (!in_array($name, $this->sites, true)) {
+            throw new RuntimeException('Unknown site ' . $name);
+        }
+        $view = clone $this;
+        $view->userRoot = 'user/sites/' . $name;
+        $view->cacheRoot = 'cache/' . $name;
+        $view->tmpRoot = 'tmp/' . $name;
+        $view->host = $name . '.test';
+        $view->isView = true;
+        $view->sites = [];
+
+        return $view;
+    }
+
+    /** Maps user/, cache/ and tmp/ paths to the folders of this site (they differ in a multisite setup). */
+    private function path(string $relative): string
+    {
+        foreach (['user' => $this->userRoot, 'cache' => $this->cacheRoot, 'tmp' => $this->tmpRoot] as $from => $to) {
+            if ($relative === $from || str_starts_with($relative, $from . '/')) {
+                $relative = $to . substr($relative, strlen($from));
+                break;
+            }
+        }
+
+        return $this->dir . '/' . $relative;
+    }
+
     public function url(string $path = '/'): string
     {
         return 'http://127.0.0.1:' . $this->port . $path;
@@ -125,7 +195,7 @@ final class TestSite
 
     public function dataDir(): string
     {
-        return $this->dir . '/user/data/redirect-manager';
+        return $this->path('user/data/redirect-manager');
     }
 
     public function repository(): RuleRepository
@@ -168,24 +238,29 @@ final class TestSite
             'debugger' => ['enabled' => false],
         ], $extra);
         $this->writeFile('user/config/system.yaml', Yaml::dump($system, 6, 2));
+        if ($this->isView) {
+            // Grav's `problems` plugin looks for user/config, user/pages and so on under the webroot, which a multisite
+            // setup does not have (Grav's multisite documentation tells to switch it off).
+            $this->writeFile('user/config/plugins/problems.yaml', "enabled: false\n");
+        }
     }
 
     public function writeFile(string $relative, string $content): void
     {
-        $path = $this->dir . '/' . $relative;
+        $path = $this->path($relative);
         if (!is_dir(dirname($path))) {
             mkdir(dirname($path), 0775, true);
         }
         file_put_contents($path, $content);
         if (str_starts_with($relative, 'user/config/')) {
             // Grav's compiled config is keyed by file mtimes (one second resolution).
-            self::rmTree($this->dir . '/cache/compiled');
+            self::rmTree($this->path('cache/compiled'));
         }
     }
 
     public function readFile(string $relative): ?string
     {
-        $path = $this->dir . '/' . $relative;
+        $path = $this->path($relative);
 
         return is_file($path) ? (string) file_get_contents($path) : null;
     }
@@ -209,6 +284,10 @@ final class TestSite
             throw new RuntimeException('curl_init failed');
         }
         $headers = [];
+        $given = array_change_key_case($options['headers'] ?? [], CASE_LOWER);
+        if ($this->host !== null && !isset($given['host'])) {
+            $headers[] = 'Host: ' . $this->host . ':' . $this->port;
+        }
         foreach ($options['headers'] ?? [] as $name => $value) {
             $headers[] = $name . ': ' . $value;
         }
@@ -298,27 +377,35 @@ final class TestSite
     /** Back to a clean site: default config, baseline pages, no rules, no logs, no test templates. */
     public function reset(): void
     {
+        if ($this->sites !== []) {
+            // A multisite installation: every site back to baseline (the logs are shared, clear them once).
+            foreach ($this->sites as $name) {
+                $this->forSite($name)->reset();
+            }
+
+            return;
+        }
         $this->dumpLogs();
-        self::rmTree($this->dir . '/user/config');
-        self::copyTree($this->base . '/user/config', $this->dir . '/user/config');
+        self::rmTree($this->path('user/config'));
+        self::copyTree($this->base . '/user/config', $this->path('user/config'));
         $this->writeSystemConfig();
-        @unlink($this->dir . '/user/config/plugins/redirect-manager.yaml');
+        @unlink($this->path('user/config/plugins/redirect-manager.yaml'));
 
         self::rmTree($this->dataDir());
-        self::rmTree($this->dir . '/cache');
-        mkdir($this->dir . '/cache', 0775, true);
-        self::rmTree($this->dir . '/tmp');
-        mkdir($this->dir . '/tmp', 0775, true);
-        self::rmTree($this->dir . '/user/themes/quark2/templates/redirect-manager');
-        foreach (glob($this->dir . '/user/themes/quark2/templates/rm-*.html.twig') ?: [] as $file) {
+        self::rmTree($this->path('cache'));
+        mkdir($this->path('cache'), 0775, true);
+        self::rmTree($this->path('tmp'));
+        mkdir($this->path('tmp'), 0775, true);
+        self::rmTree($this->path('user/themes/quark2/templates/redirect-manager'));
+        foreach (glob($this->path('user/themes/quark2/templates/rm-*.html.twig')) ?: [] as $file) {
             @unlink($file);
         }
-        foreach (glob($this->dir . '/user/plugins/rm-*') ?: [] as $extra) {
+        foreach (glob($this->path('user/plugins/rm-*')) ?: [] as $extra) {
             if (!is_link($extra)) {
                 self::rmTree($extra);
             }
         }
-        foreach (glob($this->dir . '/user/pages/*', GLOB_ONLYDIR) ?: [] as $page) {
+        foreach (glob($this->path('user/pages/*'), GLOB_ONLYDIR) ?: [] as $page) {
             if (!in_array(basename($page), self::BASELINE_PAGES, true)) {
                 self::rmTree($page);
             }
@@ -351,6 +438,9 @@ final class TestSite
 
     public function stop(): void
     {
+        if ($this->isView) {
+            return;
+        }
         $this->dumpLogs(true);
         if (is_resource($this->process)) {
             $status = proc_get_status($this->process);
@@ -383,20 +473,75 @@ final class TestSite
             }
         }
         copy($this->base . '/index.php', $this->dir . '/index.php');
-        foreach (['cache', 'logs', 'tmp', 'backup', 'assets', 'images', 'user', 'user/plugins', 'user/data'] as $folder) {
+        foreach (['cache', 'logs', 'tmp', 'backup', 'assets', 'images', 'user'] as $folder) {
             mkdir($this->dir . '/' . $folder, 0775, true);
+        }
+        if ($this->sites === []) {
+            $this->buildUserFolder($this);
+
+            return;
+        }
+        $this->writeSetupFile();
+        foreach ($this->sites as $name) {
+            $site = $this->forSite($name);
+            foreach (['cache', 'tmp', 'images'] as $folder) {
+                mkdir($this->dir . '/' . $folder . '/' . $name, 0775, true);
+            }
+            $this->buildUserFolder($site);
+        }
+    }
+
+    /** user/ of one site: config, pages, accounts and themes copied, data empty, every plugin linked. */
+    private function buildUserFolder(self $site): void
+    {
+        foreach (['', 'plugins', 'data'] as $folder) {
+            $dir = $site->path('user') . ($folder === '' ? '' : '/' . $folder);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0775, true);
+            }
         }
         foreach (['config', 'pages', 'accounts', 'themes'] as $folder) {
             if (is_dir($this->base . '/user/' . $folder)) {
-                self::copyTree($this->base . '/user/' . $folder, $this->dir . '/user/' . $folder);
+                self::copyTree($this->base . '/user/' . $folder, $site->path('user/' . $folder));
             }
         }
         foreach (scandir($this->base . '/user/plugins') ?: [] as $plugin) {
             if ($plugin !== '.' && $plugin !== '..') {
-                symlink($this->base . '/user/plugins/' . $plugin, $this->dir . '/user/plugins/' . $plugin);
+                symlink($this->base . '/user/plugins/' . $plugin, $site->path('user/plugins/' . $plugin));
             }
         }
-        $this->writeSystemConfig();
+        $site->writeSystemConfig();
+    }
+
+    /**
+     * setup.php as in Grav's multisite documentation: the site name (first label of the host, or RM_SITE for
+     * command line runs) picks user/, cache/, images/ and tmp/ of that site. Logs stay shared.
+     */
+    private function writeSetupFile(): void
+    {
+        $names = var_export($this->sites, true);
+        $setup = <<<PHP
+<?php
+
+\$sites = $names;
+\$host = strtolower((string) strtok((string) (\$_SERVER['HTTP_HOST'] ?? ''), ':'));
+\$name = getenv('RM_SITE') ?: explode('.', \$host)[0];
+if (!in_array(\$name, \$sites, true)) {
+    \$name = \$sites[0];
+}
+
+return [
+    'streams' => [
+        'schemes' => [
+            'user' => ['type' => 'ReadOnlyStream', 'force' => true, 'prefixes' => ['' => ["user/sites/\$name"]]],
+            'cache' => ['type' => 'Stream', 'force' => true, 'prefixes' => ['' => ["cache/\$name"], 'images' => ["images/\$name"]]],
+            'tmp' => ['type' => 'Stream', 'force' => true, 'prefixes' => ['' => ["tmp/\$name"]]],
+        ],
+    ],
+];
+
+PHP;
+        file_put_contents($this->dir . '/setup.php', $setup);
     }
 
     private function start(): void

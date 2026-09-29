@@ -29,9 +29,25 @@ namespace Psr\Http\Message {
         }
     }
 
+    if (!interface_exists(UriInterface::class, false)) {
+        interface UriInterface extends \Stringable
+        {
+            public function getPath(): string;
+
+            public function getQuery(): string;
+        }
+    }
+
     if (!interface_exists(ServerRequestInterface::class, false)) {
         interface ServerRequestInterface extends MessageInterface
         {
+            public function getMethod(): string;
+
+            public function getUri(): UriInterface;
+
+            /** @return array<string, mixed> */
+            public function getCookieParams(): array;
+
             /** @return array<string, mixed> */
             public function getQueryParams(): array;
 

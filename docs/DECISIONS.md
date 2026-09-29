@@ -8,7 +8,7 @@ Target Grav 2.2.2 (current stable on 2026-09-29), API plugin 1.0.42, Admin 2 2.1
 
 ## D-002: No hard dependency on api or admin2
 
-The API and Admin 2 plugins are optional. Without them the `onApi*` events never fire; frontend redirects, the 404 log, Twig functions and the CLI still work. Hard dependencies would force GPM to install the whole admin stack on headless or CLI-managed sites.
+The API and Admin 2 plugins are optional. Without them the `onApi*` events never fire; frontend redirects, the 404 log, Twig functions and the CLI still work. Hard dependencies would force GPM to install the whole admin stack on headless or CLI-managed sites. The versions that work together are recorded, not declared: Admin 2 itself declares `api >= 1.0.40`, and this plugin was tested with API plugin 1.0.42 and Admin 2 2.1.25 (README, Requirements). Older versions are untested.
 
 ## D-003: Permission names `api.redirects.read` and `api.redirects.manage`
 
@@ -114,3 +114,47 @@ Cost: the ETag of `GET /mcp/tools` is built from the enabled-plugin set and the 
 ## D-025: Hit and 404 writers retry until they hold the current file, and never give up early
 
 Both append-only logs (`Stats/HitRecorder`, `NotFound/JsonlLogStore`) are rewritten by rename while writers run: `StatsStore::aggregate()` renames the day file, `purge()`, `deletePath()` and rotation replace or delete it. A writer opens the file, locks it, checks that the path still points at the file it locked, and starts over otherwise; the aggregator locks the renamed file before it reads it. That protocol is lossless, and the code did not change. What lost hits was around it: `HitRecorder` allowed 5 attempts and then threw ("kept changing while writing"), and it threw "Cannot open hit log" when a concurrent writer had just created the directory. `StatsStoreTest::testRecordingWhileAggregatingLosesAndDuplicatesNothing` ran the aggregator in a loop without a pause, so a loaded machine (writers descheduled between open and lock) hit the limit in about 4 of 5 runs at 16 parallel test runs; the failing worker dropped its remaining hits (the 3,983 of 4,000). Both limits are now 1,000 attempts, meant to stop a broken file system and not to be reached, and a failed open creates the directory and retries once before it counts as an error. `HitRecorder` has an optional `afterOpen` hook (tests only) that runs an aggregation in the window between open and lock; `HitRecorderAggregationRaceTest` uses it. Not changed: `flock()` results are still not checked, because a file system without lock support (some network mounts) would otherwise lose every hit.
+
+## D-026: The list command is `rules`, with the alias `redirects:list`
+
+The brief asks for a CLI command `list`. `bin/plugin redirect-manager` runs on Symfony Console (7.4.19 in `vendor/`), and Symfony has a built-in command named `list`. It is the default command and prints the overview of all commands of the plugin. A plugin command with the same name would take its place:
+
+- Registered with `Application::add()`, it replaces the built-in one, so a bare `bin/plugin redirect-manager` would run our command instead of showing the overview.
+- Registered through a command loader, which is how Grav loads plugin commands (`PluginCommandLoader.php`, `PluginApplication::init()`), an explicit `bin/plugin redirect-manager list` runs ours, and the overview is reachable only without a command name.
+
+Both were tried on a stand-alone Symfony `Application` with the same loader arrangement, not inside `bin/plugin` itself. Either outcome makes `list` behave unlike the `list` of every other Grav plugin, so the command is `rules`. `redirects:list` is an alias, and so is `redirects:<name>` for every other command, which keeps names unique if several plugins ever share one console. Earlier text in README and in the help of `cli/RulesCommand.php` said Symfony "reserves" the name. That was wrong: Symfony accepts it. The reason is the lost overview.
+
+Change it: rename the command in `RulesCommand::configure()` and drop the alias. Scripts that call `rules` would break.
+
+## D-027: MCP tools are a manifest and a registrar, there is no `McpTools` class
+
+The brief lists a class `McpTools`. MCP tools of a Grav 2 plugin are data, not code. The API plugin's `McpToolCollector::add()` takes a plain array per tool (`name`, `title`, `description`, `method`, `path`, `permission`, `input`, ...) and rejects entries that break its rules (`grav-plugin-api/classes/Api/Mcp/McpToolCollector.php`, `add()` from line 125, allowed methods in `METHODS`). A tool has no handler. grav-mcp calls the REST route named by `method` and `path` with the caller's own API key, so permissions, validation and errors stay in the controllers. A PHP class per tool would add a second implementation of routes that already exist, or would only build the same arrays. So the six tools are declared once in `config/mcp.yaml`, and `Grav/McpManifest` hands them to the collector in `onApiMcpTools` (`redirect-manager.php`). The manifest is a file that tests read: `U:Grav/McpManifestTest` checks the six names and `I:ApiSystemTest::testEveryMcpToolPointsAtAWorkingRoute` calls each route. Why the file sits in `config/` and not in the plugin root, and what that costs, is in D-024. Tool naming is in D-013.
+
+Change it: a `McpTools` class that returns the manifest array would work and be trivial. It would not make tools executable in PHP, because the API plugin offers no such hook.
+
+## D-028: The frontend bundles live in `admin-next/`, not `assets/`
+
+The brief names `assets/` as the place for the frontend bundle. Admin 2 does not look there. The API plugin serves plugin UI from fixed paths: the page from `admin-next/pages/<slug>.js` (`GpmController::customPageScript()`, line 1753, and the existence check at line 1738), the dashboard widget from `admin-next/widgets/<slug>.js` (line 1770), and field, panel, modal and report scripts from sibling folders. A bundle in `assets/` would never be loaded. So `admin-next/pages/redirect-manager.js` and `admin-next/widgets/redirect-manager.js` are the committed build output (D-010), and the source is in `admin2/`. `assets/` exists in a checkout as an empty, untracked folder. `scripts/build-release.sh` copies it only when it holds files. `U:PluginLayoutTest` and step 5 of the release build check the layout.
+
+Change it: only if Admin 2 changes its convention.
+
+## D-029: SQLite covers the 404 log only, rules stay in YAML
+
+The brief says "Optional SQLite-Backend mit identischem Interface" in the sentence after the 404 log, and it specifies rule storage separately: YAML, "versionierbar mit Git Sync". We read the SQLite option as an option for the 404 log. `NotFound/LogStore` is the interface, `JsonlLogStore` (default) and `SqliteLogStore` implement it, both run the same 27 contract tests (`U:NotFound/LogStoreContract`), and `log.backend: sqlite` falls back to JSONL with a warning when `pdo_sqlite` is missing (`Grav/ServiceFactory.php`). Not covered by SQLite: rules, hit logs and statistics. Rules in a binary database file cannot be diffed, merged or edited by hand, which are the reasons for YAML (D-006), and the compiled cache keys on the mtime and size of `rules.yaml`. Hit logs and statistics are append-only files whose rename protocol (D-007, D-025) has no SQLite counterpart. The log is the part that grows large, is never versioned and is queried by grouping, so it is where SQLite pays.
+
+Change it: a `RuleStore` interface with a SQLite implementation that passes the same tests as `RuleRepositoryTest`, plus an answer to Git Sync (export to YAML on change). We did not build it because the brief's other requirements point the other way.
+
+## D-030: After a page change the editor sees a sidebar badge and a panel, not a toast
+
+The brief wants a notification when an automatic redirect is created. What exists: the plugin's sidebar item shows a badge with the unseen automatic rules and pending delete decisions (D-023), and the Rules tab lists them in a "new automatic redirects" panel with "Mark as seen". What Admin 2 does not offer is a plugin message on the page-save screen. Read in the sources under `grav-plugin-api` and `grav-admin-next` (commits in `docs/GRAV2-NOTES.md`):
+
+- The page editor shows fixed texts. `src/routes/pages/edit/[...route]/+page.svelte` calls `toast.success(i18n.t('ADMIN_NEXT.PAGES.SAVED'))` after a save (line 1524) and `PAGE_SAVED_AND_MOVED` after a move (lines 1450 and 1510). It never looks for a toast in the response body.
+- A server-provided toast is honoured in one place only. `extractToastHint()` (`src/lib/utils/toast-hint.ts`) is called from `src/routes/plugin/[slug]/+page.svelte` (lines 153 and 162), for the actions and save endpoints of the plugin's own page. The response of `PATCH /pages/{route}` is not part of that.
+- The API plugin builds that response from its page serializer after firing `onApiPageUpdated` (`PagesController::update()`, lines 960 to 968; `move()` likewise, lines 1127 to 1148). The event carries the page, and nothing in the response is taken from listeners. The only `toast` field on the server side is the fifth argument of `ErrorResponse::create()` (`ErrorResponse.php:56-64`), for errors.
+- The host fires no window event when a page save ends. `grav:editor:save` is a keyboard command that asks the editor to save.
+
+So a toast on the page-save response is not possible without a change in the API plugin or in Admin 2. The README says so under "Known limits".
+
+One supported place exists that 1.0.0 does not use: a context panel. A plugin registers it in `onApiContextPanels` (format in the class comment of `ContextPanelController.php`) and ships `admin-next/panels/<slug>.js`. It adds a button to the page editor toolbar (`ContextPanelTriggers`, `pages/edit/[...route]/+page.svelte:1826`), with an optional badge that the host reads from a plugin endpoint returning `{count}` and refetches after page updates, and a slide-in panel. That would show "this page created N redirects" next to the editor. It needs a second bundle and an endpoint that answers per route and language. We noted context panels as irrelevant during research (`docs/GRAV2-NOTES.md`, appendix B), and read them properly only when writing this entry. It is the recommended next step for this limit, not a promise.
+
+Also from reading the source: Admin 2 refetches sidebar badge counts on content invalidations with the action create, delete, move, copy or list (`AppShell.svelte`, `COUNT_CHANGING_ACTIONS`), and a page update response carries the `pages:list` tag (`PagesController.php:968`). The badge should therefore refresh after a save without a reload. This was read, not observed.

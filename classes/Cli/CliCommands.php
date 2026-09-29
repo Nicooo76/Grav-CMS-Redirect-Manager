@@ -326,12 +326,15 @@ final class CliCommands
         });
     }
 
-    public function export(string $format, ?string $output, bool $onlyEnabled, ?string $group, bool $json = false): int
+    public function export(string $format, ?string $output, bool $onlyEnabled, ?string $group, bool $json = false, ?string $host = null): int
     {
-        return $this->guard(function () use ($format, $output, $onlyEnabled, $group, $json): int {
+        return $this->guard(function () use ($format, $output, $onlyEnabled, $group, $json, $host): int {
             $query = ['format' => $format, 'only_enabled' => $onlyEnabled];
             if ($group !== null) {
                 $query['group'] = $group;
+            }
+            if ($host !== null && $host !== '') {
+                $query['host'] = $host;
             }
             $result = $this->app->importExport()->export($query);
 

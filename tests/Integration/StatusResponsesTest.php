@@ -69,6 +69,68 @@ final class StatusResponsesTest extends IntegrationTestCase
         self::assertStringContainsString('Unavailable for legal reasons', $this->get('/blocked')->body, 'the other template keeps the default');
     }
 
+    public function testThemeCanOverrideTheLegalReasonsTemplate(): void
+    {
+        $this->site()->writeFile('user/themes/quark2/templates/redirect-manager/unavailable.html.twig', '<h1>CUSTOM LEGAL {{ redirect_status }}</h1>');
+        $this->rules([
+            ['id' => 'g', 'source' => '/removed', 'target' => '', 'status' => 410],
+            ['id' => 'l', 'source' => '/blocked', 'target' => '', 'status' => 451],
+        ]);
+
+        $r = $this->get('/blocked');
+        self::assertSame(451, $r->status);
+        self::assertSame('<h1>CUSTOM LEGAL 451</h1>', trim($r->body));
+        self::assertSame('noindex', $r->header('x-robots-tag'));
+        self::assertSame('Grav Redirect Manager', $r->header('x-redirect-by'));
+        $gone = $this->get('/removed');
+        self::assertSame(410, $gone->status);
+        self::assertMatchesRegularExpression('/This page (has been|was) removed/', $gone->body, 'the 410 page keeps the default');
+        self::assertStringNotContainsString('CUSTOM LEGAL', $gone->body);
+
+        // Removing the override brings the plugin template back.
+        unlink($this->site()->dir . '/user/themes/quark2/templates/redirect-manager/unavailable.html.twig');
+        self::assertStringContainsString('Unavailable for legal reasons', $this->get('/blocked')->body);
+    }
+
+    /** @return iterable<string, array{string, int, string}> template, status, rule source */
+    public static function errorTemplates(): iterable
+    {
+        yield '410 gone.html.twig' => ['gone', 410, '/removed/*'];
+        yield '451 unavailable.html.twig' => ['unavailable', 451, '/blocked/*'];
+    }
+
+    /**
+     * The variables a theme template can use, as documented at the top of the shipped templates:
+     * redirect_status (int), redirect_path (the requested path without base path and language prefix, as matched),
+     * plus Grav's own Twig variables (site, config, base_url, home_url, html_lang) and the |t filter.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('errorTemplates')]
+    public function testErrorTemplatesGetTheDocumentedVariables(string $template, int $status, string $source): void
+    {
+        $this->site()->writeFile('user/themes/quark2/templates/redirect-manager/' . $template . '.html.twig', <<<'TWIG'
+STATUS:{{ redirect_status }}
+PATH:{{ redirect_path }}
+TYPE:{{ redirect_status is same as(410) or redirect_status is same as(451) ? 'int' : 'other' }}
+SITE:{{ site.title }}
+HOME:{{ home_url }}
+LANG:{{ html_lang }}
+TEXT:{{ 'PLUGIN_REDIRECT_MANAGER.FRONTEND.HOME_LINK'|t }}
+TWIG);
+        $this->rules([['id' => 'x', 'source' => $source, 'target' => '', 'status' => $status, 'match_type' => 'wildcard']]);
+        $base = rtrim($source, '*');
+
+        $r = $this->get($base . 'deep/page?x=1');
+        self::assertSame($status, $r->status, $r->describe());
+        self::assertStringContainsString('STATUS:' . $status . "\n", $r->body);
+        self::assertStringContainsString('PATH:' . $base . "deep/page\n", $r->body, 'the path without the query string');
+        self::assertStringContainsString("TYPE:int\n", $r->body);
+        self::assertStringContainsString("SITE:Grav\n", $r->body);
+        self::assertMatchesRegularExpression('/^HOME:\S*$/m', $r->body);
+        self::assertStringContainsString("LANG:en\n", $r->body);
+        self::assertMatchesRegularExpression('/^TEXT:\S.*$/m', $r->body);
+        self::assertStringNotContainsString('PLUGIN_REDIRECT_MANAGER', $r->body, 'the |t filter translated the key');
+    }
+
     public function testPassThroughServesTheTargetPageUnderTheRequestedUrl(): void
     {
         $this->rules([['id' => 'p', 'source' => '/alias-page', 'target' => '/typography', 'status' => 200]]);

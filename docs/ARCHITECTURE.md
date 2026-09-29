@@ -5,7 +5,8 @@ This file is the contract between the parts of the plugin. If code and this file
 ## Layers
 
 ```
-redirect-manager.php        Plugin class: event wiring only, no logic
+redirect-manager.php        Plugin class: event subscriptions and one-line delegations into classes/Grav/, no logic (under 200 lines,
+                            guarded by tests/Unit/PluginLayoutTest)
 classes/
   Domain/                   Value objects and enums (Rule, Conditions, RequestContext, MatchResult, ...). No Grav.
   Util/                     Ids, Clock, PathNormalizer, small helpers. No Grav.
@@ -22,6 +23,10 @@ classes/
   Grav/                     Everything that touches Grav: RequestContextFactory, RedirectResponder (pure, returns ResponseData),
                             ServiceFactory (pure, built from config arrays), RedirectLookup, RuleEvents, TwigExtension,
                             GravPageIndexBuilder (page tree of every supported language) + PageIndexCache, SchedulerJobs (job registration and entry points).
+                            The plugin's event bodies: FrontendRedirectHandler (onPluginsLoaded, onPagesInitialized, onPageNotFound:
+                            match, send, count hits, log 404s), TwigIntegration (template paths, redirect_for, sandbox policy),
+                            AdminIntegration (permissions, sidebar, page definition, widget, MCP tools), RouteRegistrar (all 40 REST routes,
+                            the single place they are registered; the integration tests loop over it), SchedulerJobs::onInitialized.
   Auto/                     Automatic redirects. Grav-free: PageSnapshot/PageNode, AutoRedirectPlanner (plan = rules to
                             create, update, delete, notes, pending decision), AutoRedirectApplier (runs a plan in
                             RuleRepository::transaction, fires events, updates the state), AutoState, MoveDeriver,
@@ -37,7 +42,9 @@ templates/redirect-manager/ gone.html.twig, unavailable.html.twig
 tests/Unit, tests/Integration, tests/ui (Playwright)
 ```
 
-Everything outside `Grav/`, `Api/`, `Cli/`, `cli/` and `redirect-manager.php` must run without Grav, so unit tests need only `vendor/`.
+Everything outside `Grav/`, `Api/`, `Cli/`, `cli/` and `redirect-manager.php` must run without Grav, so unit tests need only `vendor/`. The classes in `Grav/` and `Auto/` that do touch Grav take the `Grav` container (or a closure that returns the `ServiceFactory`) in the constructor and are unit tested against the stand-ins in `tests/Unit/Support/Grav/`.
+
+Grav includes the plugin file before it calls `autoload()`, so `redirect-manager.php` may not extend, implement or `use` anything from `classes/`; it only names those classes inside method bodies. Page-change events of the API plugin share one method (`onApiPageEvent`), which hands the event name to `AutoRedirectListener::dispatch()`.
 
 ## Data files
 
@@ -60,7 +67,7 @@ Suggested `.gitignore` for Git Sync users: `hits/`, `404/`, `404.sqlite` (logs a
 
 The directory also carries an `.htaccess` (`Require all denied`, Apache 2.2 fallback `Deny from all`) and an empty `index.html`, written by `Storage/DataDirProtection` the first time a service that writes there is used (`ServiceFactory::protectDataDir()`). Existing files are never overwritten, so a changed `.htaccess` stays. Grav's own `.htaccess` and nginx samples already deny `user/data/` except media files; this is defence in depth (nginx ignores `.htaccess`). The read-only matching path does not touch the directory.
 
-The compiled rule set lives in `cache://redirect-manager/rules-<hash>.php` (plain `return [...]` array, OPcache friendly). It stores the `rules.yaml` mtime and size; one `stat()` per request detects changes, including those pulled in by Git Sync. Clearing the Grav cache only forces a rebuild.
+The compiled rule set lives in `cache://redirect-manager/rules-<hash>.php` (plain `return [...]` array, OPcache friendly). It stores mtime, size, inode and ctime of `rules.yaml`; one `stat()` per request detects changes, including those pulled in by Git Sync (a file replaced by `rename()` gets a new inode and ctime; a file modified within the last two seconds is also compared by content hash). Multisite: the data and cache directories follow Grav's `user://` and `cache://` streams, so every site of a `setup.php` multisite installation has its own rules, logs and compiled cache. Clearing the Grav cache only forces a rebuild.
 
 ## Rule model
 
@@ -90,9 +97,9 @@ Everything below is wrapped in try/catch: a failure is logged to `grav.log` and 
 1. `Grav\Events\PluginsLoadedEvent` (priority 10000, not in CLI): `ServiceFactory::enabled()`, then `RequestContextFactory` builds the context from the PSR request (strips base path and language prefix itself; invalid paths mean "never redirect"). Excluded paths (API route, Admin 2 route, `redirects.excluded_paths`, `/user/ /system/ /vendor/ /cache/ /logs/`) end the flow for the request. Then `CompiledRuleCache::load()` (one `stat()` plus one include when warm) and `Matcher::match(ctx, MatchPhase::Early)`.
    - The event `onRedirectMatched` fires (payload `result`, `context`, `request`, `cancel`); listeners may replace `result` or cancel.
    - 30x: hits are appended (one line per applied rule), `RedirectResponder` builds the response (Location with base path and language prefix, `Cache-Control` permanent or temporary, `X-Redirect-By`, empty body) and `$grav->close()` sends it. No session exists yet, so no cookie and cacheable. This also runs before Grav's trailing-slash redirect, so there is no double hop.
-   - 410 / 451 / pass-through: the result is kept on the plugin and finished in step 2.
+   - 410 / 451 / pass-through: the result is kept on the `FrontendRedirectHandler` and finished in step 2.
    - With `debug_timing: true` (or the environment variable `REDIRECT_MANAGER_TIMING=1`) the handler adds `X-Redirect-Manager-Time: <microseconds>` for the time from handler entry to the end of the match (services, request context, compiled rule cache, match) on every request the plugin looked at. Off by default: the only cost then is one `getenv()` and one config read. Numbers: docs/PERFORMANCE.md.
-2. `onPagesInitialized` (priority 10): 410/451 render `redirect-manager/gone.html.twig` / `unavailable.html.twig` (a theme overrides them with its own `templates/redirect-manager/...`; plugin path is added last in `onTwigTemplatePaths`) and close with that status. The session has started by now, so `Set-Cookie`, `Expires`, `Pragma` are removed before closing. Pass-through: `unset($grav['page']); $grav['page'] = $pages->find(target)`; a target that is not a routable page logs a warning, records no hit and falls through to the normal 404.
+2. `onPagesInitialized` (priority 10): 410/451 render `redirect-manager/gone.html.twig` / `unavailable.html.twig` (a theme overrides them with its own `templates/redirect-manager/...`; plugin path is added last in `onTwigTemplatePaths`; the templates get `redirect_status` and `redirect_path` plus Grav's own Twig variables, documented at the top of each template) and close with that status. The session has started by now, so `Set-Cookie`, `Expires`, `Pragma` are removed before closing. Pass-through: `unset($grav['page']); $grav['page'] = $pages->find(target)`; a target that is not a routable page logs a warning, records no hit and falls through to the normal 404.
 3. `onPageNotFound` (priority 10, above the error plugin): `NotFoundLogger::log()` (skipped for ignored paths, non-GET/HEAD, logging off, bots when `log_bots: false`), event `onNotFoundLogged` (payload `entry`), then `Matcher::match(ctx, MatchPhase::NotFound)` for "only if not found" rules with the same `onRedirectMatched` event. 30x and 410/451 are sent like in step 1/2 with the session headers stripped; pass-through sets `$event->page` and stops propagation so the error plugin does not replace it. Nothing matched: no `stopPropagation`.
 4. Hits are appended with `HitRecorder` (one line per hit); aggregation happens in the scheduler, the admin API and the CLI. Retention purges of the 404 log are not run on requests either.
 5. Twig (`onTwigInitialized`): function `redirect_for(url)` returns `{status, location, rule_id}` or null, filter `redirect_target` returns the location or its input. Both are read-only (no hit, nothing sent), consider only rules without "only if not found", and are on the sandbox allow-list (`onBuildTwigSandboxPolicy`).
@@ -101,7 +108,7 @@ Events for other plugins are fired through `Grav\RuleEvents` (`saved()`, `matche
 
 ## Automatic redirects (API page events)
 
-`AutoRedirectListener` subscribes to the API plugin's events (`onApiBeforePageUpdate`, `onApiPageUpdated`, `onApiPageMoved`, `onApiBeforePageDelete`, `onApiPageDeleted`, `onApiBeforePagesReorganize`, `onApiPagesReorganized`; batch variants carry `method: batch`). The plugin class only forwards them.
+`AutoRedirectListener` handles the API plugin's events (`onApiBeforePageUpdate`, `onApiPageUpdated`, `onApiPageMoved`, `onApiBeforePageDelete`, `onApiPageDeleted`, `onApiBeforePagesReorganize`, `onApiPagesReorganized`, listed in `AutoRedirectListener::EVENTS`; batch variants carry `method: batch`). The plugin class subscribes to them and forwards each to `AutoRedirectListener::dispatch()`.
 
 - Update: the before event captures a `PageSnapshot` only when the request body changes `header.slug` or `header.routes` (`RouteChangeDetector`), so autosaves cost nothing. The after event reloads the page tree from disk (`Pages::reset()`) and compares.
 - Move (`POST /pages/{route}/move`): the API has no before event, and the folder is renamed before the event fires. The old routes are derived from the old parent (still in place) and the slug per language (`MoveDeriver`).
@@ -120,7 +127,7 @@ The root holds exactly three yaml files: `redirect-manager.yaml` (defaults), `bl
 
 ## Integration tests
 
-`scripts/setup-test-site.sh` downloads Grav into `.grav/<version>` (gitignored) and links the plugin in. `tests/Integration` copies `user/` of that site per test class into a temp directory (system, vendor, bin and the plugins are symlinks), starts `php -S` on a free port (binary from `RM_PHP_BIN`), writes rules and config per scenario and checks real HTTP answers with curl. The Grav cache is off in the copy, so config and page edits apply at once; the plugin's compiled rule cache is not affected. PHPStan scans `.grav/2.2.2/system/src` and `.grav/2.2.2/vendor` for the Grav, Nyholm and Twig classes.
+`scripts/setup-test-site.sh` downloads Grav into `.grav/<version>` (gitignored) and links the plugin in. `tests/Integration` copies `user/` of that site per test class into a temp directory (system, vendor, bin and the plugins are symlinks), starts `php -S` on a free port (binary from `RM_PHP_BIN`), writes rules and config per scenario and checks real HTTP answers with curl. The Grav cache is off in the copy, so config and page edits apply at once; the plugin's compiled rule cache is not affected (`PageCacheTest` switches Grav's cache on). `TestSite::createMultisite()` builds a `setup.php` installation with two sites for `MultisiteTest`. `Support/RegisteredRoutes` lists the REST routes from `RouteRegistrar` and the permission each one has in `docs/openapi.yaml`; `ApiSecurityTest` runs its 401, 403 and same-origin checks over that list. A test class that needs its own port range respects the caller's `RM_PORT_RANGE`. PHPStan scans `.grav/2.2.2/system/src` and `.grav/2.2.2/vendor` for the Grav, Nyholm and Twig classes.
 
 ## Conventions for all code
 

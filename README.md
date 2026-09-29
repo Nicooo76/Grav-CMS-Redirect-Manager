@@ -34,21 +34,21 @@ Admin 2 shows the plugin as one page with six tabs: Rules, 404 monitor, Suggesti
 
 | Light | Dark |
 |---|---|
-| <img src="docs/screenshots/rules-light.png" alt="Rules tab in the light theme with pending decisions, new automatic redirects and the rule table" width="440"> | <img src="docs/screenshots/rules-dark.png" alt="Rules tab in the dark theme" width="440"> |
+| <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/rules-light.png" alt="Rules tab in the light theme with pending decisions, new automatic redirects and the rule table" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/rules-dark.png" alt="Rules tab in the dark theme" width="440"> |
 
 <details>
 <summary>More screens: editor, 404 monitor, suggestions, tester, import, export, settings, dashboard widget</summary>
 
 | Light | Dark |
 |---|---|
-| <img src="docs/screenshots/editor-light.png" alt="Rule editor with a live URL test, a conflict warning and a chain warning" width="440"> | <img src="docs/screenshots/editor-dark.png" alt="Rule editor in the dark theme" width="440"> |
-| <img src="docs/screenshots/404-light.png" alt="404 monitor with a chart of hits per day and the most requested missing paths" width="440"> | <img src="docs/screenshots/404-dark.png" alt="404 monitor in the dark theme" width="440"> |
-| <img src="docs/screenshots/suggestions-light.png" alt="Suggestions with scores, reasons and a bulk accept slider" width="440"> | <img src="docs/screenshots/suggestions-dark.png" alt="Suggestions in the dark theme" width="440"> |
-| <img src="docs/screenshots/tester-light.png" alt="URL tester showing a two-hop redirect chain" width="440"> | <img src="docs/screenshots/tester-dark.png" alt="URL tester in the dark theme" width="440"> |
-| <img src="docs/screenshots/import-light.png" alt="CSV import with column mapping and a preview" width="440"> | <img src="docs/screenshots/import-dark.png" alt="Import in the dark theme" width="440"> |
-| <img src="docs/screenshots/export-light.png" alt="Export cards for CSV, JSON, YAML, htaccess, nginx, Cloudflare, Netlify, site.yaml and WordPress" width="440"> | <img src="docs/screenshots/export-dark.png" alt="Export in the dark theme" width="440"> |
-| <img src="docs/screenshots/settings-light.png" alt="Settings tab with the Redirects section" width="440"> | <img src="docs/screenshots/settings-dark.png" alt="Settings in the dark theme" width="440"> |
-| <img src="docs/screenshots/dashboard-widget-light.png" alt="Admin 2 dashboard with the Redirects overview widget" width="440"> | <img src="docs/screenshots/dashboard-widget-dark.png" alt="Dashboard widget in the dark theme" width="440"> |
+| <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/editor-light.png" alt="Rule editor with a live URL test, a conflict warning and a chain warning" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/editor-dark.png" alt="Rule editor in the dark theme" width="440"> |
+| <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/404-light.png" alt="404 monitor with a chart of hits per day and the most requested missing paths" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/404-dark.png" alt="404 monitor in the dark theme" width="440"> |
+| <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/suggestions-light.png" alt="Suggestions with scores, reasons and a bulk accept slider" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/suggestions-dark.png" alt="Suggestions in the dark theme" width="440"> |
+| <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/tester-light.png" alt="URL tester showing a two-hop redirect chain" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/tester-dark.png" alt="URL tester in the dark theme" width="440"> |
+| <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/import-light.png" alt="CSV import with column mapping and a preview" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/import-dark.png" alt="Import in the dark theme" width="440"> |
+| <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/export-light.png" alt="Export cards for CSV, JSON, YAML, htaccess, nginx, Cloudflare, Netlify, site.yaml and WordPress" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/export-dark.png" alt="Export in the dark theme" width="440"> |
+| <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/settings-light.png" alt="Settings tab with the Redirects section" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/settings-dark.png" alt="Settings in the dark theme" width="440"> |
+| <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/dashboard-widget-light.png" alt="Admin 2 dashboard with the Redirects overview widget" width="440"> | <img src="https://github.com/pixagentur/grav-plugin-redirect-manager/raw/main/docs/screenshots/dashboard-widget-dark.png" alt="Dashboard widget in the dark theme" width="440"> |
 
 </details>
 
@@ -75,7 +75,7 @@ Admin 2 shows the plugin as one page with six tabs: Rules, 404 monitor, Suggesti
 - Logs GET and HEAD requests that end in a 404, grouped by path with hits, first and last seen, referrers and a trend.
 - Filters for 7, 30 and 90 days, bots, search text and paths you marked as done.
 - A built-in ignore list for scanner noise, your own ignore patterns, IP anonymization, retention and a size cap.
-- JSONL files by default, SQLite as an option.
+- JSONL files by default, SQLite as an option for the 404 log (rules always stay in YAML).
 
 **Suggestions**
 
@@ -342,7 +342,7 @@ Rules are ranked by `priority`, highest first. On equal priority: exact, then wi
 
 ## Import and export
 
-Admin 2: Redirects, Import / Export. CLI: `import` and `export`. REST: `/redirects/import/*` and `/redirects/export`. The full guide with every deviation is in [docs/IMPORT-FORMATS.md](docs/IMPORT-FORMATS.md).
+Admin 2: Redirects, Import / Export. CLI: `import` and `export`. REST: `/redirects/import/*` and `/redirects/export`. The full guide with every deviation is in [docs/IMPORT-FORMATS.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/IMPORT-FORMATS.md).
 
 An import shows a preview first. It validates every row like a manual rule, skips duplicates by default and refuses the whole file if one row is invalid, unless you choose to skip invalid rows.
 
@@ -380,7 +380,7 @@ Then:
 
 ## CLI reference
 
-Run commands as `bin/plugin redirect-manager <command>`. Every command also has the alias `redirects:<command>`, for example `redirects:add`. The list command is named `rules` because Symfony reserves `list`; its alias is `redirects:list`. `--help` prints the options of a command.
+Run commands as `bin/plugin redirect-manager <command>`. Every command also has the alias `redirects:<command>`, for example `redirects:add`. The command that lists rules is named `rules`, with the alias `redirects:list`. A command called `list` would take the place of Symfony's built-in `list`, the command overview of `bin/plugin redirect-manager` ([why](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/DECISIONS.md#d-026-the-list-command-is-rules-with-the-alias-redirectslist)). `--help` prints the options of a command.
 
 Options that come from the command line are validated. A bad value gives exit code 2 and a message on stderr, never a PHP error. With `--json` the only thing on stdout is one JSON document.
 
@@ -470,7 +470,7 @@ curl -s -X POST https://example.org/api/v1/redirects/rules \
 
 Add `?dry_run=1` to validate without saving. Errors follow RFC 7807. Validation errors are 422 with a list of field errors. Chains and conflicts come back as warnings in the rule's `issues`. Other codes: 401, 403, 404, 409 (a changed or already decided record, `If-Match` mismatch), 413 (import too large), 429 (link checks too close together, with `Retry-After`).
 
-Every route with its parameters and responses is in [docs/API.md](docs/API.md) and [docs/openapi.yaml](docs/openapi.yaml). The OpenAPI file is part of the release ZIP.
+Every route with its parameters and responses is in [docs/API.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/API.md) and [docs/openapi.yaml](docs/openapi.yaml). The OpenAPI file is part of the release ZIP.
 
 ## MCP tools
 
@@ -707,7 +707,7 @@ scripts/setup-test-site.sh            # once, downloads Grav 2.2.2
 scripts/benchmark-request.sh          # 10,000 rules, 2,000 requests, about 40 seconds
 ```
 
-The result goes to `build/benchmark-request.md` and `build/benchmark-request.json`. Options such as `--rules 20000` and `--port` are described in [docs/PERFORMANCE.md](docs/PERFORMANCE.md). To measure your own site, set `debug_timing: true` or `REDIRECT_MANAGER_TIMING=1` and read the `X-Redirect-Manager-Time` header.
+The result goes to `build/benchmark-request.md` and `build/benchmark-request.json`. Options such as `--rules 20000` and `--port` are described in [docs/PERFORMANCE.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/PERFORMANCE.md). To measure your own site, set `debug_timing: true` or `REDIRECT_MANAGER_TIMING=1` and read the `X-Redirect-Manager-Time` header.
 
 ## Security
 
@@ -725,19 +725,45 @@ Report a vulnerability by mail to info@pixagentur.com instead of opening a publi
 
 ## Known limits
 
-- **One page in Admin 2.** Admin 2 gives a plugin one route. Rules, 404 monitor, suggestions, tester, import / export and settings are tabs inside it, reachable by a hash (`#/rules`, `#/404`).
-- **Automatic redirects need the API plugin.** They come from the API plugin's page events. Pages changed on disk, by FTP, by a Git pull or by another tool fire no event, so no rule is created. The 404 monitor and suggestions cover that case.
-- **Moves that rename pages with translated slugs.** For a single move, the plugin derives the old routes because Grav reports the change only after the folder was renamed. That is exact for moves and for renames on sites without per-language slugs. For a move that renames a page with translated slugs it is exact only for the languages whose slug follows the folder. Reorganize, update and delete are exact.
-- **Deleting one language does nothing.** Deleting a single translation of a page that keeps other translations creates no rule, because Grav can show the default language instead and a 410 could hide a live page.
-- **Sidebar badge shows 0.** After you clear the last item live, Admin 2 shows "0" until the next reload. Admin 2 ignores a live update to nothing. The badge is empty after a reload.
-- **MCP tool list.** grav-mcp reads the tools at startup, and the `ETag` of the tool list does not change when this plugin's tools change. Restart the MCP server after an update.
-- **New rules default to 302** on a stock Grav, because the plugin follows Grav's `redirect_default_code`. Set `redirects.default_status` to 301.
-- **Grav scheduler required for housekeeping.** Without it the log is never purged, hit counts are folded into the statistics only when the API or the CLI runs, the link check does not run and no report mail goes out.
-- **Static files.** A request for a file that exists on disk may never reach Grav on Apache or nginx. Rules for such URLs only work when the web server hands missing files to Grav.
-- **The Cloudflare export needs a host.** Only the REST route takes `host`. Admin 2 and the CLI export rules with a host condition and skip the others.
-- **Export formats differ.** No format other than the plugin's own carries everything. The export names every skipped and simplified rule.
-- **Regex conditions are case sensitive.** Use `(?i)`.
-- **Tested setup.** Development and all tests ran on Grav 2.2.2 with PHP 8.3 to 8.5, mostly on the PHP built-in server. Not tested: Grav 2.1.x, reverse proxies and CDNs, Apache and nginx in production, multisite. Subfolder installs are covered through `system.custom_base_url`.
+Each entry says what is limited, why, and what to do instead. The reasons are recorded in [docs/DECISIONS.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/DECISIONS.md), and every requirement that could not be met as written is listed with its Grav or Admin 2 source in [docs/FEATURE-CHECKLIST.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/FEATURE-CHECKLIST.md).
+
+**Admin 2 and the API plugin**
+
+- **One page in Admin 2.** Admin 2 gives a plugin one page route. Rules, 404 monitor, suggestions, tester, import / export and settings are tabs inside it, reachable by a hash (`#/rules`, `#/404`). Instead: link to a tab with its hash.
+- **Automatic redirects need the API plugin.** They come from the API plugin's page events. Pages changed on disk, by FTP, by a Git pull or by another tool fire no event, so no rule is created. Instead: the 404 monitor and the suggestions catch the dead URLs afterwards.
+- **No message on the page-save screen.** After you rename, move or delete a page, Admin 2 shows its own "saved" toast and gives a plugin no way to add a line to it. Admin 2 reads a toast from a response only for a plugin's own page, and the API plugin's page routes do not let a plugin change their response. Instead: the sidebar badge next to "Redirects" counts the new automatic rules and the pending decisions, and the Rules tab lists them with "Mark as seen".
+- **Sidebar badge shows 0.** After you clear the last item in the open page, Admin 2 shows "0" until the next reload, because it ignores a live update to nothing. After a reload the badge is empty. Instead: reload, or ignore the "0".
+- **Moves that rename pages with translated slugs.** For a single move, the plugin derives the old routes because Grav reports the change only after the folder was renamed. That is exact for moves and for renames on sites without per-language slugs. For a move that renames a page with translated slugs it is exact only for the languages whose slug follows the folder. Reorganize, update and delete are exact. Instead: check the new rules after such a move, or rename in a separate step.
+- **Deleting one language does nothing.** Deleting a single translation of a page that keeps other translations creates no rule, because Grav can show the default language instead and a 410 could hide a live page. Instead: the 404 monitor shows the URL if it really dies.
+- **Permission names.** The permissions are `api.redirects.read` and `api.redirects.manage`, not `admin.redirects.*`. Grav 2 has no classic admin, and the API plugin lists only `api.*` permissions in the user editor. Instead: nothing, the names work like any other permission.
+- **OpenAPI is a file.** The API plugin has no hook for a plugin to add to its own OpenAPI description, so `docs/openapi.yaml` ships with the plugin and the API plugin does not serve it. Instead: point your API client at that file.
+
+**MCP**
+
+- **Tool list after updates.** grav-mcp reads the tools at startup, and the `ETag` of the tool list does not change when this plugin's tools change. Instead: restart the MCP server after an update.
+- **`redirects_top_404`, not `redirects_404_top`.** A tool name must start with a letter. Instead: use the shipped name.
+- **Tools are declared, not coded.** The tools live in `config/mcp.yaml` and a small registrar. An agent can only do what the REST routes let its key do. Instead: for anything else, use the REST API.
+
+**Command line**
+
+- **`rules`, not `list`.** See [CLI reference](#cli-reference). Instead: `bin/plugin redirect-manager rules`, or the alias `redirects:list`.
+
+**Storage and export**
+
+- **SQLite is for the 404 log only.** `log.backend: sqlite` moves the 404 log. Rules stay in `rules.yaml`, and hit counts and statistics stay in files. Rules in YAML are what Git Sync can diff, merge and restore, and a database file is none of that. Instead: to keep rules in Git, ignore `404.sqlite` and commit `rules.yaml`.
+- **New rules default to 302** on a stock Grav, because the plugin follows Grav's `redirect_default_code`. Instead: set `redirects.default_status` to 301.
+- **The Cloudflare export needs a host.** Only the REST route takes `host`. Admin 2 and the CLI export rules with a host condition and skip the others. Instead: use the REST route with `host` for Cloudflare.
+- **Export formats differ.** No format other than the plugin's own carries everything. The export names every skipped and simplified rule. Instead: read that list, or export as JSON or YAML.
+
+**Scheduler, matching and web server**
+
+- **Grav scheduler required for housekeeping.** Without it the log is never purged, hit counts are folded into the statistics only when the API or the CLI runs, the link check does not run and no report mail goes out. Instead: add Grav's scheduler entry to cron. `bin/plugin redirect-manager check-targets` runs the link check by hand.
+- **Static files.** A request for a file that exists on disk may never reach Grav on Apache or nginx. Rules for such URLs only work when the web server hands missing files to Grav. Instead: add the redirect to the web server for those URLs.
+- **Regex conditions are case sensitive.** Instead: start the pattern with `(?i)`.
+
+**Testing**
+
+- **Tested setup.** Development and all tests ran on Grav 2.2.2 with PHP 8.3 to 8.5, mostly on the PHP built-in server. Not tested: Grav 2.1.x, reverse proxies and CDNs, Apache and nginx in production, multisite, the real Git Sync plugin, Admin 2 in German in a browser. Subfolder installs are covered through `system.custom_base_url`. Instead: try your setup on a copy and report what breaks.
 
 ## FAQ
 
@@ -793,7 +819,7 @@ composer test        # php-cs-fixer (dry run), PHPStan level 8, unit tests
 composer test:all    # the above plus the integration suite
 ```
 
-The integration suite needs a Grav test site. `scripts/setup-test-site.sh` downloads Grav 2.2.2 into `.grav/` once. Then run `RM_PORT_RANGE=8300-8399 vendor/bin/phpunit --testsuite integration`. The suites, environment variables and coverage are in [docs/TESTING.md](docs/TESTING.md).
+The integration suite needs a Grav test site. `scripts/setup-test-site.sh` downloads Grav 2.2.2 into `.grav/` once. Then run `RM_PORT_RANGE=8300-8399 vendor/bin/phpunit --testsuite integration`. The suites, environment variables and coverage are in [docs/TESTING.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/TESTING.md).
 
 The Admin 2 interface is Svelte 5 with Vite in `admin2/`. It builds to two files in `admin-next/`, which are committed:
 
@@ -807,11 +833,11 @@ npm run build    # writes admin-next/ and the generated UI strings in ../languag
 
 Commit the build output with your change. CI rebuilds it and fails on any difference. UI text lives in `admin2/src/i18n/{en,de}/`, the rest of the language file is hand-written. German uses "Sie".
 
-The browser tests are Playwright specs in `tests/ui/`. CI runs them in the `playwright` job, see [docs/RELEASING.md](docs/RELEASING.md).
+The browser tests are Playwright specs in `tests/ui/`. CI runs them in the `playwright` job, see [docs/RELEASING.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/RELEASING.md).
 
-Code is PHP 8.3 syntax with `declare(strict_types=1)`, PSR-12 and PHPStan level 8. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the contract between the parts, [docs/DECISIONS.md](docs/DECISIONS.md) explains the choices, and [docs/GRAV2-NOTES.md](docs/GRAV2-NOTES.md) holds what was verified about Grav 2.
+Code is PHP 8.3 syntax with `declare(strict_types=1)`, PSR-12 and PHPStan level 8. [docs/ARCHITECTURE.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/ARCHITECTURE.md) is the contract between the parts, [docs/DECISIONS.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/DECISIONS.md) explains the choices, and [docs/GRAV2-NOTES.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/GRAV2-NOTES.md) holds what was verified about Grav 2.
 
-**Releasing.** A release is a tag `vX.Y.Z` on a commit whose `blueprints.yaml` says `version: X.Y.Z`. `scripts/build-release.sh <version>` builds the ZIP and `scripts/test-release.sh` installs it into a clean Grav, exercises it and uninstalls it again. The full process is in [docs/RELEASING.md](docs/RELEASING.md).
+**Releasing.** A release is a tag `vX.Y.Z` on a commit whose `blueprints.yaml` says `version: X.Y.Z`. `scripts/build-release.sh <version>` builds the ZIP and `scripts/test-release.sh` installs it into a clean Grav, exercises it and uninstalls it again. The full process is in [docs/RELEASING.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/RELEASING.md).
 
 ## License
 
@@ -835,7 +861,7 @@ Redirect Manager leitet Besucher von alten auf neue URLs um und zeigt, welche al
 4. Lassen Sie den 404-Monitor einige Tage sammeln. Erzeugen Sie dann unter Suggestions Vorschläge und übernehmen Sie die guten. Vorschläge ab Score 0,9 lassen sich gesammelt übernehmen, mit Vorschau.
 5. Sorgen Sie dafür, dass der Grav-Scheduler läuft. Er räumt das Protokoll auf, zählt die Treffer zusammen und prüft die Weiterleitungsziele.
 
-**Relaunch von einer alten Seite.** Importieren Sie die alte `.htaccess` oder nginx-Konfiguration und die Weiterleitungen aus `site.yaml`. Laden Sie danach die alte `sitemap.xml` unter Import / Export hoch. Sie erhalten alle URLs, für die es weder eine Seite noch eine Regel gibt, jede davon als Vorschlag. Die Details stehen im englischen Abschnitt [Migrating from Grav 1.7](#migrating-from-grav-17) und in [docs/IMPORT-FORMATS.md](docs/IMPORT-FORMATS.md).
+**Relaunch von einer alten Seite.** Importieren Sie die alte `.htaccess` oder nginx-Konfiguration und die Weiterleitungen aus `site.yaml`. Laden Sie danach die alte `sitemap.xml` unter Import / Export hoch. Sie erhalten alle URLs, für die es weder eine Seite noch eine Regel gibt, jede davon als Vorschlag. Die Details stehen im englischen Abschnitt [Migrating from Grav 1.7](#migrating-from-grav-17) und in [docs/IMPORT-FORMATS.md](https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/docs/IMPORT-FORMATS.md).
 
 **Datenschutz im Detail.**
 
@@ -852,6 +878,6 @@ Redirect Manager leitet Besucher von alten auf neue URLs um und zeigt, welche al
 
 Ob diese Vorkehrungen für Ihre rechtlichen Pflichten genügen, entscheiden Sie. Das ist keine Rechtsberatung.
 
-**Bekannte Grenzen.** Automatische Weiterleitungen entstehen nur bei Änderungen über Admin 2, die REST-API oder MCP. Seiten, die Sie per FTP oder Git ändern, lösen nichts aus. Dafür sind der 404-Monitor und die Vorschläge da. Im Admin-Menü zeigt die Zahl neben "Redirects" nach dem Abhaken der letzten Meldung bis zum Neuladen "0". Nach einem Update starten Sie den MCP-Server neu. Alle Grenzen stehen im englischen Abschnitt [Known limits](#known-limits).
+**Bekannte Grenzen.** Automatische Weiterleitungen entstehen nur bei Änderungen über Admin 2, die REST-API oder MCP. Seiten, die Sie per FTP oder Git ändern, lösen nichts aus. Dafür sind der 404-Monitor und die Vorschläge da. Beim Speichern einer Seite zeigt Admin 2 keinen Hinweis des Plugins an, weil Admin 2 Plugins dafür keine Möglichkeit gibt. Die Zahl neben "Redirects" im Admin-Menü und die Liste auf dem Reiter Rules melden neue automatische Regeln. Die Zahl zeigt nach dem Abhaken der letzten Meldung bis zum Neuladen "0". Der Befehl zum Auflisten heißt `rules` statt `list`, weil `list` die Befehlsübersicht von `bin/plugin` ersetzen würde. SQLite gilt nur für das 404-Protokoll, die Regeln bleiben in YAML, damit Git Sync sie vergleichen kann. Die Rechte heißen `api.redirects.read` und `api.redirects.manage`. Nach einem Update starten Sie den MCP-Server neu. Alle Grenzen stehen im englischen Abschnitt [Known limits](#known-limits).
 
 **Weiter lesen** (englisch): [Configuration reference](#configuration-reference) für jede Einstellung, [Rule reference](#rule-reference) für Regelfelder und Reihenfolge, [CLI reference](#cli-reference) mit Exit-Codes und CI-Beispiel, [REST API](#rest-api), [Security](#security), [FAQ](#faq).

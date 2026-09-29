@@ -47,6 +47,24 @@ final class SchedulerJobs
 
     private const DEFAULT_CHECK_SCHEDULE = '30 3 * * 0';
 
+    /**
+     * Handler of onSchedulerInitialized: a failure is logged and never breaks the scheduler run.
+     *
+     * @param Closure(): ServiceFactory $services
+     */
+    public static function onInitialized(Grav $grav, Scheduler $scheduler, Closure $services): void
+    {
+        try {
+            self::register($scheduler, $services());
+        } catch (Throwable $e) {
+            try {
+                $grav['log']->error(sprintf('Redirect Manager: scheduler registration failed: %s (%s:%d)', $e->getMessage(), basename($e->getFile()), $e->getLine()));
+            } catch (Throwable) {
+                // nothing left to do
+            }
+        }
+    }
+
     public static function register(Scheduler $scheduler, ServiceFactory $services): void
     {
         $backlink = '/plugin/redirect-manager';

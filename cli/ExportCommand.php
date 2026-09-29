@@ -23,11 +23,13 @@ class ExportCommand extends ConsoleCommand
             ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Write to this file instead of stdout')
             ->addOption('only-enabled', null, InputOption::VALUE_NONE, 'Leave out disabled rules')
             ->addOption('group', null, InputOption::VALUE_REQUIRED, 'Only rules of this group')
+            ->addOption('host', null, InputOption::VALUE_REQUIRED, 'Host for formats with absolute sources (cloudflare_csv), e.g. example.org')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Print file name, type and counts as JSON (with --output), else the content in a JSON document')
             ->setHelp(<<<'HELP'
 The <info>export</info> command writes the rules to stdout or to a file.
 
   <info>bin/plugin redirect-manager export --format=htaccess --output=redirects.htaccess</info>
+  <info>bin/plugin redirect-manager export --format=cloudflare_csv --host=example.org --output=cloudflare.csv</info>
 
 Exit codes: 0 ok, 1 the file cannot be written, 2 unknown format.
 HELP);
@@ -47,6 +49,7 @@ HELP);
             Options::bool($input, 'only-enabled'),
             Options::string($input, 'group'),
             Options::bool($input, 'json'),
+            Options::string($input, 'host'),
         );
     }
 }

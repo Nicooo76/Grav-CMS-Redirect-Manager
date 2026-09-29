@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Grav\Plugin\RedirectManager\Tests\Integration;
 
+use Grav\Plugin\RedirectManager\Auto\AutoState;
+use Grav\Plugin\RedirectManager\Auto\PageSnapshot;
 use Grav\Plugin\RedirectManager\Tests\Integration\Support\AccountFactory;
 use Grav\Plugin\RedirectManager\Tests\Integration\Support\ApiClient;
 use Grav\Plugin\RedirectManager\Tests\Integration\Support\ApiResponse;
+use Grav\Plugin\RedirectManager\Tests\Integration\Support\RegisteredRoutes;
 use Grav\Plugin\RedirectManager\Tests\Integration\Support\SessionLogin;
+use Grav\Plugin\RedirectManager\Util\SystemClock;
 use PHPUnit\Framework\Attributes\Group;
 
 /**
@@ -35,62 +39,35 @@ final class ApiSecurityTest extends ApiTestCase
         ];
     }
 
-    /**
-     * Routes that need `api.redirects.read`: [method, path, query, body]. {rid} is replaced by an existing rule id.
-     *
-     * @return list<array{0: string, 1: string, 2: array<string, mixed>, 3: array<string, mixed>|null}>
-     */
-    private static function readRoutes(): array
-    {
-        return [
-            ['GET', '/redirects/rules', [], null],
-            ['GET', '/redirects/rules/{rid}', [], null],
-            ['POST', '/redirects/rules/validate', [], ['source' => '/v', 'target' => '/typography']],
-            ['GET', '/redirects/analysis', [], null],
-            ['GET', '/redirects/groups', [], null],
-            ['POST', '/redirects/test', [], ['url' => '/x']],
-            ['GET', '/redirects/404', [], null],
-            ['GET', '/redirects/404/trend', [], null],
-            ['GET', '/redirects/404/entries', ['path' => '/x'], null],
-            ['GET', '/redirects/suggest', ['path' => '/x'], null],
-            ['GET', '/redirects/suggestions', [], null],
-            ['GET', '/redirects/import/formats', [], null],
-            ['GET', '/redirects/export', [], null],
-            ['GET', '/redirects/site-config', [], null],
-            ['GET', '/redirects/stats', [], null],
-            ['GET', '/redirects/checks', [], null],
-            ['GET', '/redirects/pages', [], null],
-        ];
-    }
+    private const READ = 'api.redirects.read';
+    private const MANAGE = 'api.redirects.manage';
 
     /**
-     * Routes that need `api.redirects.manage`: [method, path, query]. The body is always an empty JSON object.
+     * Every route that needs the permission, with the input it needs to get past validation.
      *
-     * @return list<array{0: string, 1: string, 2: array<string, mixed>}>
+     * @return list<array{0: string, 1: string, 2: array<string, mixed>, 3: array<string, mixed>|null}> method, path, query, body
      */
+    private static function routes(string $permission): array
+    {
+        $out = [];
+        foreach (RegisteredRoutes::needing($permission) as $route) {
+            [$query, $body] = RegisteredRoutes::input($route);
+            $out[] = [$route['method'], $route['path'], $query, $body];
+        }
+
+        return $out;
+    }
+
+    /** @return list<array{0: string, 1: string, 2: array<string, mixed>, 3: array<string, mixed>|null}> */
+    private static function readRoutes(): array
+    {
+        return self::routes(self::READ);
+    }
+
+    /** @return list<array{0: string, 1: string, 2: array<string, mixed>, 3: array<string, mixed>|null}> */
     private static function manageRoutes(): array
     {
-        return [
-            ['POST', '/redirects/rules', []],
-            ['POST', '/redirects/rules/restore', []],
-            ['POST', '/redirects/rules/bulk', []],
-            ['POST', '/redirects/rules/reorder', []],
-            ['PATCH', '/redirects/rules/{rid}', []],
-            ['DELETE', '/redirects/rules/{rid}', []],
-            ['POST', '/redirects/rules/{rid}/shorten-chain', []],
-            ['POST', '/redirects/404/ignore', []],
-            ['POST', '/redirects/404/resolve', []],
-            ['DELETE', '/redirects/404', []],
-            ['POST', '/redirects/suggestions/generate', []],
-            ['POST', '/redirects/suggestions/bulk-accept', []],
-            ['POST', '/redirects/suggestions/{sid}/accept', []],
-            ['POST', '/redirects/suggestions/{sid}/reject', []],
-            ['POST', '/redirects/import/preview', []],
-            ['POST', '/redirects/import/commit', []],
-            ['POST', '/redirects/import/sitemap', []],
-            ['POST', '/redirects/site-config/import', []],
-            ['POST', '/redirects/checks/run', []],
-        ];
+        return self::routes(self::MANAGE);
     }
 
     /**
@@ -101,9 +78,9 @@ final class ApiSecurityTest extends ApiTestCase
         return array_map(static fn ($rule): array => $rule->toArray(), $this->site()->repository()->all());
     }
 
-    private static function fill(string $path, string $rid, string $sid): string
+    private static function fill(string $path, string $rid, string $unused = ''): string
     {
-        return str_replace(['{rid}', '{sid}'], [$rid, $sid], $path);
+        return RegisteredRoutes::fill($path, $rid);
     }
 
     /**
@@ -150,7 +127,8 @@ final class ApiSecurityTest extends ApiTestCase
             $this->assertProblem($response, 401, $method . ' ' . $path);
             ++$checked;
         }
-        self::assertSame(36, $checked);
+        self::assertSame(count(RegisteredRoutes::all()), $checked, 'every registered route was checked');
+        self::assertGreaterThanOrEqual(40, $checked);
         self::assertSame(['/a'], array_column($this->stored(), 'source'), 'nothing changed');
     }
 
@@ -293,16 +271,76 @@ final class ApiSecurityTest extends ApiTestCase
         self::assertCount(1, $this->stored());
     }
 
-    public function testEveryManageRouteRefusesACrossOriginCookieWrite(): void
+    public function testEveryWriteRouteRefusesACrossOriginCookieWrite(): void
     {
         $cookie = $this->sessionCookie();
         $client = new ApiClient($this->site(), ['Cookie' => $cookie]);
         $rule = $this->createRule(['source' => '/a', 'target' => '/typography', 'status' => 301]);
-        foreach (self::manageRoutes() as [$method, $path, $query]) {
-            $response = $client->request($method, self::fill($path, $rule['id'], 'snope'), [], $query, ['Origin' => 'https://evil.example']);
-            $this->assertProblem($response, 403, $method . ' ' . $path);
+        // Something for the auto-redirect routes to destroy: a deleted page waiting for a decision and an unseen rule.
+        $state = new AutoState($this->site()->dataDir() . '/auto-state.json', new SystemClock());
+        $pending = $state->addPending(new PageSnapshot('Deleted page', '/deleted-page', [PageSnapshot::ANY => '/deleted-page']));
+        $state->addUnseen([$rule['id']]);
+        $badgeBefore = $this->api->get('/redirects/badge')->data();
+        self::assertSame(2, $badgeBefore['count'], 'one unseen rule and one pending decision');
+        $checked = [];
+        // Every POST, PATCH, PUT and DELETE route the plugin registers, including the ones that only need the read
+        // permission (validate, test) and the auto-redirect routes (resolve a pending delete, mark the badge seen).
+        foreach (RegisteredRoutes::writes() as $route) {
+            [$query, $body] = RegisteredRoutes::input($route);
+            $path = RegisteredRoutes::fill($route['path'], $rule['id'], $pending->id);
+            $label = $route['method'] . ' ' . $route['path'];
+            foreach ([['Origin' => 'https://evil.example'], ['Referer' => 'https://evil.example/page'], ['Origin' => 'null']] as $headers) {
+                $response = $client->request($route['method'], $path, $body ?? [], $query, $headers);
+                $this->assertProblem($response, 403, $label . ' ' . json_encode($headers));
+                self::assertStringContainsString('session cookie alone', (string) ($response->json['detail'] ?? ''), $label);
+            }
+            $checked[] = $label;
         }
-        self::assertCount(1, $this->site()->repository()->all());
+        self::assertContains('POST /redirects/pending/{id}/resolve', $checked);
+        self::assertContains('POST /redirects/badge/seen', $checked);
+        self::assertContains('POST /redirects/test', $checked);
+        self::assertGreaterThanOrEqual(23, count($checked));
+        self::assertCount(count(RegisteredRoutes::writes()), $checked);
+        self::assertCount(1, $this->site()->repository()->all(), 'nothing was created, changed or deleted');
+        self::assertSame('', $this->stored()[0]['note']);
+        self::assertSame($badgeBefore, $this->api->get('/redirects/badge')->data(), 'unseen rules and pending decisions are untouched');
+        self::assertCount(1, $state->pending(), 'the pending decision was not resolved');
+
+        // Control: the same request from this site does clear the unseen rule, so the refusals above did protect something.
+        $own = $client->request('POST', '/redirects/badge/seen', [], [], ['Origin' => $this->site()->url('')]);
+        self::assertSame(200, $own->status, $own->describe());
+        self::assertSame(1, $this->api->get('/redirects/badge')->data()['count'], 'only the pending decision is left');
+    }
+
+    public function testEveryReadRouteStillWorksForACookieWithAForeignOrigin(): void
+    {
+        // Reads are not forgeable (the attacker cannot read the answer), so the guard leaves them alone.
+        $cookie = $this->sessionCookie();
+        $client = new ApiClient($this->site(), ['Cookie' => $cookie]);
+        $rule = $this->createRule(['source' => '/a', 'target' => '/typography', 'status' => 301]);
+        $gets = 0;
+        foreach (RegisteredRoutes::all() as $route) {
+            if ($route['method'] !== 'GET') {
+                continue;
+            }
+            [$query] = RegisteredRoutes::input($route);
+            $response = $client->request('GET', RegisteredRoutes::fill($route['path'], $rule['id']), null, $query, ['Origin' => 'https://evil.example']);
+            self::assertSame(200, $response->status, $route['path'] . ' ' . $response->describe());
+            ++$gets;
+        }
+        self::assertSame(count(RegisteredRoutes::all()) - count(RegisteredRoutes::writes()), $gets);
+        self::assertGreaterThanOrEqual(17, $gets);
+    }
+
+    public function testEveryWriteRouteAcceptsACookieWriteFromThisSiteUpToTheRoutesOwnValidation(): void
+    {
+        $cookie = $this->sessionCookie();
+        $client = new ApiClient($this->site(), ['Cookie' => $cookie]);
+        foreach (RegisteredRoutes::writes() as $route) {
+            $response = $client->request($route['method'], RegisteredRoutes::fill($route['path'], 'rnope'), [], [], ['Origin' => $this->site()->url('')]);
+            self::assertNotContains($response->status, [401], $route['method'] . ' ' . $route['path'] . ' ' . $response->describe());
+            self::assertStringNotContainsString('session cookie alone', (string) ($response->json['detail'] ?? ''), $route['method'] . ' ' . $route['path']);
+        }
     }
 
     public function testACookieWriteFromThisSiteIsAccepted(): void

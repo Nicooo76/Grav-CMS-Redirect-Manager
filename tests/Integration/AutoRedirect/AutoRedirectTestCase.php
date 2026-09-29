@@ -14,7 +14,7 @@ use Grav\Plugin\RedirectManager\Tests\Integration\Support\ApiResponse;
  * Base class of the automatic-redirect tests: a temp Grav site with the API plugin, a super admin token (from
  * .grav/credentials.env, never printed) and helpers to edit pages through the REST API like Admin 2 does.
  *
- * Ports 8300-8399 (RM_PORT_RANGE), so the suites of other agents and the dev site stay out of the way.
+ * Ports: the caller's RM_PORT_RANGE, 8300-8399 when none is set, so parallel runs and the dev site stay apart.
  */
 abstract class AutoRedirectTestCase extends IntegrationTestCase
 {
@@ -22,7 +22,7 @@ abstract class AutoRedirectTestCase extends IntegrationTestCase
 
     public static function setUpBeforeClass(): void
     {
-        putenv('RM_PORT_RANGE=8300-8399');
+        putenv('RM_PORT_RANGE=' . (getenv('RM_PORT_RANGE') ?: '8300-8399'));
         parent::setUpBeforeClass();
         if (ApiClient::adminCredentials() === null) {
             self::markTestSkipped('No API test user. Run scripts/setup-test-site.sh first.');

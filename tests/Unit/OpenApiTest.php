@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Grav\Plugin\RedirectManager\Tests\Unit;
 
 use FilesystemIterator;
+use Grav\Plugin\RedirectManager\Grav\RouteRegistrar;
+use Grav\Plugin\RedirectManager\Tests\Unit\Grav\Support\RouteCollector;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
@@ -248,6 +250,24 @@ final class OpenApiTest extends TestCase
 
         self::assertNotSame([], $routes, 'No route registration found in redirect-manager.php; did the pattern change?');
         self::assertSame([], $duplicates, "Routes registered more than once:\n" . implode("\n", $duplicates));
+    }
+
+    public function testTheRealRegistrationMatchesTheDocumentAndTheSourceScan(): void
+    {
+        // What the plugin registers when the API plugin fires onApiRegisterRoutes: both listeners, in that order.
+        $collector = new RouteCollector();
+        RouteRegistrar::register($collector);
+        RouteRegistrar::registerAuto($collector);
+        $registered = array_keys($collector->routes);
+
+        $documented = array_keys(self::operations());
+        sort($registered);
+        sort($documented);
+        self::assertSame($documented, $registered, 'the routes the plugin registers and the routes docs/openapi.yaml describes differ');
+
+        $scanned = self::registeredRoutes();
+        sort($scanned);
+        self::assertSame($scanned, $registered, 'a route is registered outside RouteRegistrar (the integration suite derives its route lists from the registrars)');
     }
 
     public function testOpenApiDescribesExactlyTheRegisteredRoutes(): void

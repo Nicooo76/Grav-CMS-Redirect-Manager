@@ -14,7 +14,7 @@ final class WithoutApiPluginTest extends IntegrationTestCase
 {
     public static function setUpBeforeClass(): void
     {
-        putenv('RM_PORT_RANGE=8300-8399');
+        putenv('RM_PORT_RANGE=' . (getenv('RM_PORT_RANGE') ?: '8300-8399'));
         parent::setUpBeforeClass();
     }
 

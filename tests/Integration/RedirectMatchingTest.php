@@ -138,6 +138,119 @@ final class RedirectMatchingTest extends IntegrationTestCase
         $this->assertNotRedirected($this->get('/beta'));
     }
 
+    public function testSchemeCondition(): void
+    {
+        // php -S has no TLS: the scheme of the request comes from X-Forwarded-Proto, which only counts behind a trusted proxy.
+        $this->rules([
+            ['id' => 'tls', 'source' => '/secure-only', 'target' => '/typography', 'conditions' => ['schemes' => ['https']]],
+            ['id' => 'plain', 'source' => '/plain-only', 'target' => '/typography', 'conditions' => ['schemes' => ['http']]],
+        ]);
+
+        // trust off (the default): the header is ignored, the request is plain http
+        $this->assertNotRedirected($this->get('/secure-only', ['headers' => ['X-Forwarded-Proto' => 'https']]), 'untrusted X-Forwarded-Proto');
+        $this->assertRedirect($this->get('/plain-only', ['headers' => ['X-Forwarded-Proto' => 'https']]), 301, '/typography', 'the header must not turn http into https');
+
+        $this->site()->writePluginConfig(['security' => ['trust_proxy_headers' => true]]);
+        $https = $this->get('/secure-only', ['headers' => ['X-Forwarded-Proto' => 'https']]);
+        $this->assertRedirect($https, 301, '/typography');
+        $this->assertRedirect($this->get('/secure-only', ['headers' => ['X-Forwarded-Proto' => 'HTTPS']]), 301, '/typography', 'case-insensitive');
+        $this->assertRedirect($this->get('/secure-only', ['headers' => ['X-Forwarded-Proto' => 'https, http']]), 301, '/typography', 'the first hop counts');
+        $this->assertNotRedirected($this->get('/secure-only', ['headers' => ['X-Forwarded-Proto' => 'http']]));
+        $this->assertNotRedirected($this->get('/secure-only'), 'no header: plain http');
+        $this->assertNotRedirected($this->get('/secure-only', ['headers' => ['X-Forwarded-Proto' => 'gopher']]), 'unknown schemes are ignored');
+
+        $this->assertRedirect($this->get('/plain-only'), 301, '/typography');
+        $this->assertRedirect($this->get('/plain-only', ['headers' => ['X-Forwarded-Proto' => 'http']]), 301, '/typography');
+        $this->assertNotRedirected($this->get('/plain-only', ['headers' => ['X-Forwarded-Proto' => 'https']]));
+    }
+
+    public function testRefererCondition(): void
+    {
+        $this->rules([
+            ['id' => 'ref', 'source' => '/from-partner', 'target' => '/typography', 'conditions' => ['rules' => [
+                ['kind' => 'header', 'name' => 'Referer', 'operator' => 'regex', 'value' => '^https://partner\.example\.org/'],
+            ]]],
+            ['id' => 'ref-fallback', 'source' => '/from-partner', 'target' => '/home', 'priority' => -1],
+        ]);
+
+        $match = $this->get('/from-partner', ['headers' => ['Referer' => 'https://partner.example.org/blog/post?utm=x']]);
+        $this->assertRedirect($match, 301, '/typography');
+        self::assertSame('Referer', $match->header('vary'), 'the answer depends on the Referer');
+
+        $this->assertRedirect($this->get('/from-partner', ['headers' => ['Referer' => 'https://evil.example/https://partner.example.org/']]), 301, '/home', 'an unrelated referer falls to the next rule');
+        $this->assertRedirect($this->get('/from-partner', ['headers' => ['Referer' => 'http://partner.example.org/']]), 301, '/home', 'the scheme is part of the pattern');
+        $this->assertRedirect($this->get('/from-partner'), 301, '/home', 'no Referer at all');
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, list<array{array<string, string>, bool}>}> */
+    public static function headerOperators(): iterable
+    {
+        yield 'exists' => [
+            ['operator' => 'exists', 'name' => 'X-Preview'],
+            [[['X-Preview' => '1'], true], [['X-Other' => '1'], false], [[], false]],
+        ];
+        yield 'equals' => [
+            ['operator' => 'equals', 'name' => 'X-Tier', 'value' => 'gold'],
+            [[['X-Tier' => 'gold'], true], [['X-Tier' => 'GOLD'], true], [['X-Tier' => 'golden'], false], [[], false]],
+        ];
+        yield 'contains' => [
+            ['operator' => 'contains', 'name' => 'X-Tier', 'value' => 'old'],
+            [[['X-Tier' => 'gold'], true], [['X-Tier' => 'silver'], false]],
+        ];
+        yield 'starts_with' => [
+            ['operator' => 'starts_with', 'name' => 'Accept-Language', 'value' => 'de'],
+            [[['Accept-Language' => 'de-DE,de;q=0.9'], true], [['Accept-Language' => 'en,de;q=0.9'], false], [[], false]],
+        ];
+        yield 'regex' => [
+            ['operator' => 'regex', 'name' => 'X-Build', 'value' => '^v\d+\.\d+$'],
+            [[['X-Build' => 'v2.10'], true], [['X-Build' => 'v2'], false], [['X-Build' => 'x v2.10'], false], [[], false]],
+        ];
+        yield 'negated exists' => [
+            ['operator' => 'exists', 'name' => 'X-Preview', 'negate' => true],
+            [[['X-Preview' => '1'], false], [[], true]],
+        ];
+        yield 'negated starts_with' => [
+            ['operator' => 'starts_with', 'name' => 'Accept-Language', 'value' => 'de', 'negate' => true],
+            [[['Accept-Language' => 'de-DE'], false], [['Accept-Language' => 'fr'], true]],
+        ];
+        yield 'negated regex' => [
+            ['operator' => 'regex', 'name' => 'Referer', 'value' => 'google\.', 'negate' => true],
+            [[['Referer' => 'https://www.google.com/'], false], [['Referer' => 'https://bing.com/'], true]],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed>                          $condition
+     * @param list<array{array<string, string>, bool}>      $cases request headers => whether the rule applies
+     */
+    #[DataProvider('headerOperators')]
+    public function testHeaderOperators(array $condition, array $cases): void
+    {
+        $this->rules([['id' => 'op', 'source' => '/op', 'target' => '/typography', 'conditions' => ['rules' => [['kind' => 'header'] + $condition]]]]);
+
+        foreach ($cases as [$headers, $applies]) {
+            $r = $this->get('/op', ['headers' => $headers]);
+            $label = json_encode($headers) . ' expects ' . ($applies ? 'redirect' : 'no redirect');
+            if ($applies) {
+                $this->assertRedirect($r, 301, '/typography', $label);
+            } else {
+                $this->assertNotRedirected($r, $label);
+                self::assertSame(404, $r->status, $label);
+            }
+        }
+    }
+
+    public function testAHeaderConditionAndACookieConditionMustBothHold(): void
+    {
+        $this->rules([['id' => 'both', 'source' => '/both', 'target' => '/typography', 'conditions' => ['rules' => [
+            ['kind' => 'header', 'name' => 'X-Tier', 'operator' => 'equals', 'value' => 'gold'],
+            ['kind' => 'cookie', 'name' => 'beta', 'operator' => 'exists'],
+        ]]]]);
+        $this->assertRedirect($this->get('/both', ['headers' => ['X-Tier' => 'gold'], 'cookies' => ['beta' => 'x']]), 301, '/typography');
+        $this->assertNotRedirected($this->get('/both', ['headers' => ['X-Tier' => 'gold']]));
+        $this->assertNotRedirected($this->get('/both', ['cookies' => ['beta' => 'x']]));
+    }
+
     /** @return iterable<string, array{int, string}> */
     public static function redirectStatuses(): iterable
     {

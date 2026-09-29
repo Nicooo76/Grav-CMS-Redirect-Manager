@@ -508,6 +508,18 @@ final class CliCommandsTest extends AppTestCase
         self::assertFileExists($file);
     }
 
+    public function testExportHostTurnsCloudflareSourcesIntoAbsoluteOnes(): void
+    {
+        $this->seedRules([['id' => 'r1', 'source' => '/a', 'target' => '/x', 'status' => 301]]);
+
+        self::assertSame(ExitCode::OK, $this->cli()->export('cloudflare_csv', null, false, null, false, 'example.org'));
+        $with = $this->output->fetch();
+        self::assertStringContainsString('example.org/a,https://example.org/x,301', $with);
+
+        self::assertSame(ExitCode::OK, $this->cli()->export('cloudflare_csv', null, false, null));
+        self::assertStringNotContainsString('example.org', $this->output->fetch(), 'without a host the rule is skipped');
+    }
+
     public function testExportRejectsAnUnknownFormatAndAnUnwritableFile(): void
     {
         self::assertSame(ExitCode::INVALID, $this->cli()->export('docx', null, false, null));

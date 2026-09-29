@@ -57,6 +57,26 @@ final class AutoRedirectListener
     ) {
     }
 
+    /** The API plugin's page-change events the plugin subscribes to, event name => handler method. */
+    public const EVENTS = [
+        'onApiBeforePageUpdate' => 'onBeforePageUpdate',
+        'onApiPageUpdated' => 'onPageUpdated',
+        'onApiPageMoved' => 'onPageMoved',
+        'onApiBeforePageDelete' => 'onBeforePageDelete',
+        'onApiPageDeleted' => 'onPageDeleted',
+        'onApiBeforePagesReorganize' => 'onBeforePagesReorganize',
+        'onApiPagesReorganized' => 'onPagesReorganized',
+    ];
+
+    /** Routes one of the EVENTS to its handler; any other event name is ignored. */
+    public function dispatch(string $eventName, Event $event): void
+    {
+        $method = self::EVENTS[$eventName] ?? null;
+        if ($method !== null) {
+            $this->{$method}($event);
+        }
+    }
+
     public function onBeforePageUpdate(Event $event): void
     {
         $this->guard('update capture', function () use ($event): void {

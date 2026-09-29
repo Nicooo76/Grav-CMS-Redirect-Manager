@@ -107,6 +107,61 @@ final class ApiRulesTest extends ApiTestCase
         self::assertSame(301, $this->createRule(['source' => '/b', 'target' => '/typography', 'status' => 301])['status'], 'an explicit status wins');
     }
 
+    /**
+     * @return iterable<string, array{array<string, mixed>, array<string, mixed>, int}> system.pages, plugin config, status of a new rule
+     */
+    public static function defaultStatusMatrix(): iterable
+    {
+        yield 'nothing set: Grav ships 302' => [[], [], 302];
+        yield 'Grav 301, plugin 0' => [['redirect_default_code' => 301], ['redirects' => ['default_status' => 0]], 301];
+        yield 'Grav 302, plugin 0' => [['redirect_default_code' => 302], ['redirects' => ['default_status' => 0]], 302];
+        yield 'Grav 301, plugin absent' => [['redirect_default_code' => 301], [], 301];
+        yield 'plugin 308 beats Grav 301' => [['redirect_default_code' => 301], ['redirects' => ['default_status' => 308]], 308];
+        yield 'plugin 307 beats Grav 302' => [['redirect_default_code' => 302], ['redirects' => ['default_status' => 307]], 307];
+        yield 'plugin 301 with Grav 302' => [['redirect_default_code' => 302], ['redirects' => ['default_status' => 301]], 301];
+    }
+
+    /**
+     * @param array<string, mixed> $pages
+     * @param array<string, mixed> $plugin
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('defaultStatusMatrix')]
+    public function testNewRulesTakeTheDefaultStatusFromTheRightSetting(array $pages, array $plugin, int $expected): void
+    {
+        $this->site()->writeSystemConfig(['pages' => $pages]);
+        if ($plugin !== []) {
+            $this->site()->writePluginConfig($plugin);
+        }
+
+        $created = $this->createRule(['source' => '/default-status', 'target' => '/typography']);
+        self::assertSame($expected, $created['status']);
+        self::assertSame($expected, $this->get('/default-status')->status, 'the frontend answers with the stored status');
+        self::assertSame($expected, $this->site()->repository()->all()[0]->status->value, 'stored in rules.yaml');
+
+        $explicit = $expected === 301 ? 308 : 301;
+        self::assertSame($explicit, $this->createRule(['source' => '/explicit', 'target' => '/typography', 'status' => $explicit])['status'], 'an explicit status is never replaced by a default');
+    }
+
+    public function testWritingRulesThroughTheApiNeverTouchesGravsSystemConfiguration(): void
+    {
+        $this->site()->writeSystemConfig(['pages' => ['redirect_default_route' => 301, 'redirect_default_code' => 302, 'redirect_trailing_slash' => 1]]);
+        $before = $this->site()->readFile('user/config/system.yaml');
+        self::assertNotNull($before);
+
+        $created = $this->createRule(['source' => '/a', 'target' => '/typography']);
+        $other = $this->createRule(['source' => '/b', 'target' => '/typography', 'status' => 308]);
+        self::assertSame(200, $this->api->patch('/redirects/rules/' . $created['id'], ['target' => '/home', 'note' => 'edited'])->status);
+        self::assertSame(200, $this->api->post('/redirects/rules/bulk', ['action' => 'disable', 'ids' => [$other['id']]])->status);
+        self::assertSame(200, $this->api->post('/redirects/rules/reorder', ['ids' => [$other['id'], $created['id']]])->status);
+        $import = $this->api->post('/redirects/import/commit', ['content' => "/c /typography 301\n", 'format' => 'netlify']);
+        self::assertSame(200, $import->status, $import->describe());
+        self::assertSame(200, $this->api->delete('/redirects/rules/' . $created['id'])->status);
+        self::assertSame(200, $this->api->post('/redirects/rules/bulk', ['action' => 'delete', 'ids' => [$other['id']]])->status);
+
+        self::assertSame($before, $this->site()->readFile('user/config/system.yaml'), 'system.yaml is byte-identical after create, edit, bulk, reorder, import and delete');
+        self::assertSame(1, count($this->site()->repository()->all()), 'only the imported rule is left');
+    }
+
     public function testStatus410NeedsNoTargetAndAnswersGone(): void
     {
         $rule = $this->createRule(['source' => '/gone', 'status' => 410]);

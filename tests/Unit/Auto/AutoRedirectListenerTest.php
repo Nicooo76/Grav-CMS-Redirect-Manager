@@ -369,6 +369,32 @@ final class AutoRedirectListenerTest extends GravTestCase
         self::assertCount(2, $this->rules());
     }
 
+    // ---- dispatch (what the plugin class subscribes to) -------------------------------------------------------
+
+    public function testDispatchRoutesTheApiEventNamesToTheirHandlers(): void
+    {
+        $listener = $this->listener();
+        $blog = $this->blog('/news');
+
+        $listener->dispatch('onApiPageMoved', $this->moveEvent('/blog', '/news', $blog));
+
+        self::assertSame(['/blog => /news [301]', '/blog/* => /news/$1 [301]'], self::pairs($this->rules()));
+    }
+
+    public function testDispatchIgnoresOtherEventNamesAndEveryMappedHandlerExists(): void
+    {
+        $listener = $this->listener();
+        $blog = $this->blog('/news');
+        $listener->dispatch('onSomethingElse', $this->moveEvent('/blog', '/news', $blog));
+        self::assertSame([], $this->rules());
+
+        self::assertCount(7, AutoRedirectListener::EVENTS);
+        foreach (AutoRedirectListener::EVENTS as $event => $method) {
+            self::assertStringStartsWith('onApi', $event);
+            self::assertTrue(is_callable([$listener, $method]), $event . ' => ' . $method);
+        }
+    }
+
     // ---- move -------------------------------------------------------------------------------------------------
 
     public function testMoveFromTheRootDerivesTheOldRoutes(): void

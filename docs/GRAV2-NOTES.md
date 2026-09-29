@@ -404,21 +404,22 @@ public function onRegisterPermissions(PermissionsRegisterEvent $event): void {
 }
 ```
 
-`permissions.yaml` (`grav-plugin-api/permissions.yaml`, `grav-plugin-consent/permissions.yaml`):
+`permissions.yaml` (format as in `grav-plugin-api/permissions.yaml` and `grav-plugin-consent/permissions.yaml`; the example uses this plugin's final names, the file ships as `config/permissions.yaml`, see D-024):
 ```yaml
 actions:
-  api.redirects:            # nested "actions" become api.redirects.read / api.redirects.write
+  api.redirects:            # nested "actions" become api.redirects.read / api.redirects.manage
     type: access
-    label: PLUGIN_REDIRECTS.PERMISSION.GROUP
+    label: PLUGIN_REDIRECT_MANAGER.PERMISSIONS.GROUP
     actions:
       read:
-        label: PLUGIN_REDIRECTS.PERMISSION.READ
-      write:
-        label: PLUGIN_REDIRECTS.PERMISSION.WRITE
+        label: PLUGIN_REDIRECT_MANAGER.PERMISSIONS.READ
+      manage:
+        label: PLUGIN_REDIRECT_MANAGER.PERMISSIONS.MANAGE
 ```
+Early drafts of this document used `write` as the second verb. The plugin ships `manage` (D-003). Upstream plugins use `read` and `write`, for example consent.
 `PermissionsReader::read()` flattens nested `actions` into dotted names (`system/src/Grav/Framework/Acl/PermissionsReader.php:61-70`).
 
-Enforcement in API controllers: `requirePermission($request, 'api.redirects.write')` (see section 6.3). It resolves via `PermissionResolver::resolve()` which walks up the dot path (`api.redirects.write` -> `api.redirects` -> `api`) and returns the first explicit value (`grav-plugin-api/classes/Api/PermissionResolver.php:41-56`). `admin.super` bypasses (`AbstractApiController.php:100-101`).
+Enforcement in API controllers: `requirePermission($request, 'api.redirects.manage')` (see section 6.3). It resolves via `PermissionResolver::resolve()` which walks up the dot path (`api.redirects.manage` -> `api.redirects` -> `api`) and returns the first explicit value (`grav-plugin-api/classes/Api/PermissionResolver.php:41-56`). `admin.super` bypasses (`AbstractApiController.php:100-101`).
 
 Naming convention: name custom permissions under `api.<plugin>` (consent uses `api.consent.read|write`). `PermissionResolver::resolvedMap()` (used for the user profile / capabilities payload, `AbstractApiController.php:1019`) only lists permissions starting with `api.` (`PermissionResolver.php:111-113`), so a permission outside the `api.` namespace works for `requirePermission()` but will not show up in that map.
 
@@ -563,7 +564,7 @@ From `grav-plugin-api/README.md:944-1052` and `grav-skills/skills/grav-plugin-re
 - The official server is `getgrav/grav-mcp` (npm `grav-mcp`), a standalone Node.js app, **not** a Grav plugin. It calls the API plugin over HTTP with an API key (`grav-mcp/README.md:1-60`; docs https://learn.getgrav.org/2/advanced/mcp-server).
 - **Plugins can add MCP tools without writing MCP code**, via a manifest `mcp.yaml` in the plugin root next to `blueprints.yaml`/`permissions.yaml` (do not: it breaks `bin/gpm direct-install`, see section 1 "GPM package name"), or in PHP via the `onApiMcpTools` event, which this plugin uses to register its `config/mcp.yaml`. Contract: `grav-mcp/docs/plugin-tools-spec.md`; user docs `grav-plugin-api/README.md:1054-1213`; implementation `grav-plugin-api/classes/Api/Mcp/McpManifestLoader.php` (reads `plugins://{slug}/mcp.yaml`, line 150-158) and `McpToolCollector.php`; endpoint `GET /mcp/tools` (permission `api.access`; `grav-mcp/src/tools/plugin-tools.ts:96-97`).
 - Manifest fields: `version` (1 or 2), optional `prefix` (default slug with `-` -> `_`; tool name `{prefix}_{name}`, regex `^[a-z][a-z0-9_]*$`, max 64 chars), `tools[]: name, title, description, method, path, permission, annotations{readOnly,destructive,idempotent}, input (JSON Schema subset), query, body (v2)`. Path placeholders must be plain `{id}` (no FastRoute regex like `{id:\d+}`).
-- Minimal example for this project:
+- Minimal example for this project (a research-phase draft with placeholder tool names; the shipped manifest is `config/mcp.yaml` with the six `redirects_*` tools, see D-013 and D-024):
 ```yaml
 version: 1
 prefix: redirects
@@ -582,7 +583,7 @@ tools:
     description: Create a redirect rule.
     method: POST
     path: /redirects
-    permission: api.redirects.write
+    permission: api.redirects.manage
     input:
       type: object
       required: [source, target]
@@ -860,7 +861,7 @@ Other extension points, same mechanism (file + event):
 | Page | `onApiPluginPageInfo` | `admin-next/pages/<slug>.js` | `grav-<slug>--page` |
 | Floating widget (FAB) | `onApiFloatingWidgets` | `admin-next/widgets/<slug>.js` | `grav-<slug>--widget` |
 | Dashboard widget | `onApiDashboardWidgets` | same `widgets/<slug>.js` via `scriptUrl` | `grav-widget-<id-slug>` |
-| Context panel | `onApiContextPanels` | `admin-next/panels/<slug>.js` | `grav-<slug>--panel`? (`__GRAV_PANEL_TAG`) |
+| Context panel | `onApiContextPanels` | `admin-next/panels/<slug>.js` | `grav-<slug>--panel` (`ContextPanelHost.svelte` `getTagName()`); trigger button in the page editor (`pages/edit/[...route]/+page.svelte:1826`), optional badge endpoint returning `{count}`, refetched after page updates |
 | Modal | (call via JS/menubar) | `admin-next/modals/<id>.js` | `grav-<slug>--modal-<id>` |
 | Report | `onApiGenerateReports` | `admin-next/reports/<id>.js` | `grav-<slug>--<id>` |
 | Custom field | (blueprint `type:`) | `admin-next/fields/<type>.js` | `__GRAV_FIELD_TAG` |
@@ -1069,7 +1070,7 @@ If a build (Vite) is desired after all: the loading mechanism implies the output
 - **Blob import and relative imports / code splitting**: inferred from loading mechanism (blob URL without base), not tested. Before Vite setup in a dev Grav, test: single file, no `import.meta.url`, no dynamic imports.
 - **CSP**: I found no Content-Security-Policy in the admin shell (`admin2.php`, API). If a host enforces `script-src` without `blob:`, all plugin components would fail. Not checked.
 - **Sidebar `route` with hash** not explicitly documented (see above).
-- **Panel tag** (`grav-<slug>--panel`?) and context panel contract not read in detail (`ContextPanelController.php`, `ContextPanelHost.svelte`); probably irrelevant for a typical plugin.
+- **Context panels** were first judged irrelevant. Read later (`ContextPanelController.php` class comment, `ContextPanelTriggers.svelte`, `ContextPanelHost.svelte`): a plugin can put a button with a live badge into the page editor toolbar and open a slide-in panel there. It is the only supported place to show a plugin's notice next to the page editor, see DECISIONS.md D-030. The plugin does not use it in 1.0.0.
 - **Rate limit order for `*-script`**: skill claims exemption, default config names only `/sync/`, `/thumbnails/`; not traced to source.
 - **No live test**: none of this ran against a running Grav 2.1 instance. All statements come from source code at the commits listed above. Version drift possible (admin2 2.1.25, api 1.0.42).
 - **`onApiPluginPageInfo` with `page_type: 'component'`** without `.js` file: `has_custom_component` becomes `false`, SPA loads `page-script` anyway and reports "Failed to load page component" (`PluginPageComponent.svelte:71-74`). File must exist.

@@ -1,0 +1,5 @@
+URL,HTTP Status Code,Indexable,Crawl Depth,Internal Links In,Redirect URL
+https://example.com/downloads/broschuere.pdf,404,No,3,7,
+https://example.com/team/ehemalig,410,No,2,1,
+https://example.com/kontakt,200,Yes,1,88,
+/relative/pfad,404,No,4,2,

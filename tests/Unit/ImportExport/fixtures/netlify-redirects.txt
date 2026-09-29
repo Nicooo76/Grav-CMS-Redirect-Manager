@@ -1,0 +1,15 @@
+# Netlify _redirects
+/home / 301
+/blog/* /news/:splat 301
+/news/:year/:month /archive/:year-:month 301!
+/store id=:id /blog/:id 301
+/shop category=shoes /schuhe 302
+/gone /404.html 410
+/rewrite /page.html 200
+/proxy https://api.example.com/v1 200
+/en/* /de/:splat 301 Country=de Language=de
+https://alt.example.com/* https://neu.example.com/:splat 301!
+/mehr /dazu
+/kein-ziel
+/falsch /ziel 404
+/unbekannt /ziel/:fehlt 301

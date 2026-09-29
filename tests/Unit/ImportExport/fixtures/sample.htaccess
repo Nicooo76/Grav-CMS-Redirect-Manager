@@ -1,0 +1,69 @@
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
+
+# Simple redirects
+Redirect 301 /alt/seite.html /neu/seite
+Redirect permanent /firma "https://www.example.com/unternehmen"
+Redirect temp /aktion /angebote
+Redirect seeother /formular /danke
+Redirect gone /entfernt
+Redirect 410 /veraltet
+RedirectPermanent /a /b
+RedirectTemp /c /d
+RedirectMatch 301 ^/produkte/(\d+)/?$ /shop/artikel-$1
+RedirectMatch 302 (?i)^/News/(.*)$ /aktuelles/$1
+RedirectMatch gone ^/tmp/.*$
+
+<IfModule mod_rewrite.c>
+RewriteBase /kunde
+# Trailing backslash joins the lines
+RewriteRule ^alte-seite/?$ \
+    neue-seite [R=301,L,NC,QSA]
+RewriteRule ^shop$ /katalog? [R,L]
+RewriteRule "^mit leerzeichen$" /ohne-leerzeichen [R=301,L]
+RewriteRule ^leer$ "/ziel mit leerzeichen" [R=301,L]
+RewriteRule ^gesperrt$ - [F]
+RewriteRule ^weg$ - [G,L]
+RewriteRule ^intern$ /index.php?page=intern [L]
+
+# Host based
+RewriteBase /
+RewriteCond %{HTTP_HOST} ^(www\.)?altedomain\.de$ [NC]
+RewriteRule ^(.*)$ https://neuedomain.de/$1 [R=301,L]
+
+RewriteCond %{HTTP_HOST} ^shop\.example\.com$ [NC,OR]
+RewriteCond %{HTTP_HOST} ^store\.example\.com$ [NC]
+RewriteRule ^katalog$ /produkte [R=302,L]
+
+# Query based
+RewriteCond %{QUERY_STRING} ^p=(\d+)$
+RewriteRule ^index\.php$ /beitrag/%1? [R=301,L]
+RewriteCond %{QUERY_STRING} ^id=42$
+RewriteRule ^artikel\.php$ /artikel/zweiundvierzig? [R=301,L]
+RewriteCond %{QUERY_STRING} (^|&)ref=partner(&|$)
+RewriteRule ^angebot$ /partner-angebot [R=301,L]
+
+# Unsupported condition, still imported and flagged
+RewriteCond %{REMOTE_ADDR} ^10\.0\.0\.
+RewriteRule ^intranet$ /wartung [R=302,L]
+
+# Only if no file exists
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^fehlt$ /gefunden [R=301,L]
+
+# Force https, uses server variables: skipped
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+</IfModule>
+
+<FilesMatch "\.(jpg|png)$">
+Redirect 301 /bild.jpg /neu.jpg
+</FilesMatch>

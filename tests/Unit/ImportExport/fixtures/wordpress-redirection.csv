@@ -1,0 +1,7 @@
+source,target,regex,code,type,hits,title,status
+/kontakt-alt,/kontakt,0,301,url,154,Kontaktseite umgezogen,enabled
+"/blog/(\d{4})/(.*)","/magazin/$1/$2",1,301,url,2210,,enabled
+/shop/altes-produkt,,0,410,error,3,"Produkt eingestellt, endgültig",enabled
+/kampagne,/,0,302,url,0,Vorübergehend,disabled
+/zufall,,0,302,random,0,,enabled
+/alias-seite,/echte-seite,0,0,pass,1,,enabled

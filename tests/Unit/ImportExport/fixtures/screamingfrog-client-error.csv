@@ -1,0 +1,9 @@
+Address,Content Type,Status Code,Status,Indexability,Indexability Status,Inlinks,Response Time,Redirect URL,Redirect Type
+https://www.example.com/alte-seite,text/html; charset=UTF-8,404,Not Found,Non-Indexable,Client Error,12,0.245,,
+https://www.example.com/produkte/kaputt?utm_source=news,text/html; charset=UTF-8,404,Not Found,Non-Indexable,Client Error,3,0.310,,
+https://www.example.com/entfernt,text/html; charset=UTF-8,410,Gone,Non-Indexable,Client Error,1,0.120,,
+https://www.example.com/alte-seite,text/html; charset=UTF-8,404,Not Found,Non-Indexable,Client Error,12,0.245,,
+https://www.example.com/blog/%C3%BCber-uns,text/html; charset=UTF-8,404,Not Found,Non-Indexable,Client Error,4,0.200,,
+https://www.example.com/nicht-kaputt,text/html; charset=UTF-8,200,OK,Indexable,,50,0.100,,
+https://partner.example.net/extern,text/html; charset=UTF-8,404,Not Found,Non-Indexable,Client Error,2,0.900,,
+https://www.example.com/,text/html; charset=UTF-8,301,Moved Permanently,Non-Indexable,Redirected,1,0.100,https://www.example.com/de/,301

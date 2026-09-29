@@ -1,0 +1,76 @@
+{
+    "plugin": {"version": "5.4.2", "date": "Tue, 15 Sep 2026 09:12:44 +0000"},
+    "groups": [
+        {"id": 1, "name": "Redirections", "module_id": 1, "enabled": true, "moduleName": "WordPress", "redirects": 8},
+        {"id": 2, "name": "Modified Posts", "module_id": 1, "enabled": true, "moduleName": "WordPress", "redirects": 1},
+        {"id": 3, "name": "Relaunch 2026", "module_id": 1, "enabled": true, "moduleName": "WordPress", "redirects": 2}
+    ],
+    "redirects": [
+        {
+            "id": 12, "url": "/kontakt-alt", "match_url": "/kontakt-alt",
+            "match_data": {"source": {"flag_query": "exact", "flag_case": false, "flag_trailing": true, "flag_regex": false}},
+            "action_code": 301, "action_type": "url", "action_data": {"url": "/kontakt"},
+            "match_type": "url", "title": "Kontaktseite umgezogen", "hits": 154, "regex": false,
+            "group_id": 1, "position": 2, "last_access": "2026-09-10 08:15:01", "enabled": true, "status": "enabled"
+        },
+        {
+            "id": 3, "url": "/blog/(\\d{4})/(.*)", "match_url": "regex",
+            "match_data": {"source": {"flag_query": "pass", "flag_case": true, "flag_trailing": false, "flag_regex": true}},
+            "action_code": 301, "action_type": "url", "action_data": {"url": "/magazin/$1/$2"},
+            "match_type": "url", "title": "", "hits": 2210, "regex": true,
+            "group_id": 3, "position": 0, "last_access": "2026-09-14 19:44:12", "enabled": true, "status": "enabled"
+        },
+        {
+            "id": 4, "url": "/shop/altes-produkt", "match_url": "/shop/altes-produkt",
+            "match_data": {"source": {"flag_query": "ignore", "flag_case": false, "flag_trailing": true, "flag_regex": false}},
+            "action_code": 410, "action_type": "error", "action_data": null,
+            "match_type": "url", "title": "Produkt eingestellt", "hits": 3, "regex": false,
+            "group_id": 3, "position": 1, "last_access": "0000-00-00 00:00:00", "enabled": true, "status": "enabled"
+        },
+        {
+            "id": 15, "url": "/kampagne", "match_url": "/kampagne",
+            "match_data": {"source": {"flag_query": "ignore", "flag_case": false, "flag_trailing": true, "flag_regex": false}},
+            "action_code": 302, "action_type": "url", "action_data": {"url": "/"},
+            "match_type": "url", "title": "Vorübergehend", "hits": 0, "regex": false,
+            "group_id": 1, "position": 3, "last_access": "0000-00-00 00:00:00", "enabled": false, "status": "disabled"
+        },
+        {
+            "id": 16, "url": "/app", "match_url": "/app",
+            "match_data": {"source": {"flag_query": "ignore", "flag_case": false, "flag_trailing": true, "flag_regex": false}},
+            "action_code": 302, "action_type": "url",
+            "action_data": {"url_from": "https://example.org/app-mobile", "url_notfrom": "https://example.org/app-desktop", "agent": "iPhone|Android", "regex": true},
+            "match_type": "agent", "title": "App nach Gerät", "hits": 41, "regex": false,
+            "group_id": 1, "position": 4, "last_access": "2026-09-12 07:00:00", "enabled": true, "status": "enabled"
+        },
+        {
+            "id": 17, "url": "/partner", "match_url": "/partner",
+            "match_data": {"source": {"flag_query": "ignore", "flag_case": false, "flag_trailing": true, "flag_regex": false}},
+            "action_code": 301, "action_type": "url",
+            "action_data": {"url_from": "/partner-google", "url_notfrom": "", "referrer": "google.", "regex": false},
+            "match_type": "referrer", "title": "", "hits": 5, "regex": false,
+            "group_id": 1, "position": 5, "last_access": "2026-09-01 12:00:00", "enabled": true, "status": "enabled"
+        },
+        {
+            "id": 18, "url": "/intern", "match_url": "/intern",
+            "match_data": {"source": {"flag_query": "ignore", "flag_case": false, "flag_trailing": true, "flag_regex": false}},
+            "action_code": 302, "action_type": "url",
+            "action_data": {"url_loggedin": "/dashboard", "url_loggedout": "/login"},
+            "match_type": "login", "title": "Login-abhängig", "hits": 0, "regex": false,
+            "group_id": 1, "position": 6, "last_access": "0000-00-00 00:00:00", "enabled": true, "status": "enabled"
+        },
+        {
+            "id": 19, "url": "/zufall", "match_url": "/zufall",
+            "match_data": {"source": {"flag_query": "ignore", "flag_case": false, "flag_trailing": true, "flag_regex": false}},
+            "action_code": 302, "action_type": "random", "action_data": null,
+            "match_type": "url", "title": "", "hits": 0, "regex": false,
+            "group_id": 1, "position": 7, "last_access": "0000-00-00 00:00:00", "enabled": true, "status": "enabled"
+        },
+        {
+            "id": 20, "url": "/old-domain", "match_url": "/old-domain",
+            "match_data": {"source": {"flag_query": "exact", "flag_case": false, "flag_trailing": true, "flag_regex": false}},
+            "action_code": 301, "action_type": "url", "action_data": {"url": "https://www.example.org/neu"},
+            "match_type": "url", "title": "", "hits": 12, "regex": false,
+            "group_id": 2, "position": 8, "last_access": "2026-08-30 10:00:00", "enabled": true, "status": "enabled"
+        }
+    ]
+}

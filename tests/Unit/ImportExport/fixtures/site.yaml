@@ -1,0 +1,18 @@
+title: Beispielseite
+default_lang: de
+metadata:
+    description: 'Demo'
+redirects:
+    '/alte-seite': '/neue-seite'
+    '/impressum.html': '/impressum [301]'
+    '/kontakt$': '/kontakt-neu [302]'
+    '(?i)/Gross': '/klein [307]'
+    '/blog/(.*)': '/magazin/$1 [301]'
+    '/produkt/(\d+)': '/shop/$1'
+    '^/anker/(?<name>[a-z]+)$': '/ziel/$1 [301]'
+    '/extern': 'https://www.example.org/ziel [301]'
+    '/kaputt': ''
+    '/zahl': 42
+routes:
+    '/alias': '/echte-seite'
+    '/home-alias': '/home'

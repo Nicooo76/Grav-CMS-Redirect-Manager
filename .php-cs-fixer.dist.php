@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 $finder = (new PhpCsFixer\Finder())
     ->in([__DIR__ . '/classes', __DIR__ . '/cli', __DIR__ . '/tests'])
-    ->append([__DIR__ . '/redirect-manager.php']);
+    ->append(array_filter([__DIR__ . '/redirect-manager.php'], "is_file"));
 
 return (new PhpCsFixer\Config())
     ->setRiskyAllowed(true)

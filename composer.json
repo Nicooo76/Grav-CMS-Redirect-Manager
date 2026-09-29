@@ -2,10 +2,20 @@
     "name": "pixagentur/grav-plugin-redirect-manager",
     "type": "grav-plugin",
     "description": "Redirect Manager for Grav 2: exact, wildcard and regex redirects, 404 monitor, suggestions, auto-redirects, import/export, CLI, REST API and Admin 2 UI.",
-    "keywords": ["grav", "plugin", "redirect", "301", "404", "seo"],
+    "keywords": [
+        "grav",
+        "plugin",
+        "redirect",
+        "301",
+        "404",
+        "seo"
+    ],
     "license": "MIT",
     "authors": [
-        { "name": "PixAgentur", "homepage": "https://pixagentur.com" }
+        {
+            "name": "PixAgentur",
+            "homepage": "https://pixagentur.com"
+        }
     ],
     "require": {
         "php": ">=8.3"
@@ -24,8 +34,7 @@
     "autoload": {
         "psr-4": {
             "Grav\\Plugin\\RedirectManager\\": "classes/"
-        },
-        "classmap": ["redirect-manager.php"]
+        }
     },
     "autoload-dev": {
         "psr-4": {
@@ -33,7 +42,9 @@
         }
     },
     "config": {
-        "platform": { "php": "8.3.0" },
+        "platform": {
+            "php": "8.3.0"
+        },
         "sort-packages": true,
         "optimize-autoloader": true
     },
@@ -44,6 +55,10 @@
         "unit": "phpunit --testsuite unit",
         "integration": "phpunit --testsuite integration",
         "coverage": "php -d pcov.enabled=1 vendor/bin/phpunit --testsuite unit --coverage-text --coverage-clover=build/clover.xml",
-        "test": ["@cs", "@stan", "@unit"]
+        "test": [
+            "@cs",
+            "@stan",
+            "@unit"
+        ]
     }
 }

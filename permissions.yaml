@@ -1,0 +1,9 @@
+actions:
+  api.redirects:
+    type: access
+    label: PLUGIN_REDIRECT_MANAGER.PERMISSIONS.GROUP
+    actions:
+      read:
+        label: PLUGIN_REDIRECT_MANAGER.PERMISSIONS.READ
+      manage:
+        label: PLUGIN_REDIRECT_MANAGER.PERMISSIONS.MANAGE

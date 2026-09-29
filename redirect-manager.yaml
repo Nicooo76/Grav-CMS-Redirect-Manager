@@ -1,0 +1,68 @@
+enabled: true
+
+redirects:
+  enabled: true
+  # 0 = use system.pages.redirect_default_code for new rules
+  default_status: 0
+  # Keep the /de or /en prefix of the request on internal targets
+  keep_language_prefix: true
+  cache_control_permanent: 'public, max-age=3600'
+  cache_control_temporary: 'no-store'
+  max_chain_depth: 10
+  query_ignore: ['utm_*', 'fbclid', 'gclid', 'msclkid']
+  # Extra path prefixes that are never redirected. The API and admin routes are always excluded.
+  excluded_paths: []
+
+security:
+  # Hosts allowed as external targets, e.g. ['example.org', '*.example.org']
+  allowed_hosts: []
+  allow_any_external: false
+  # Honour X-Forwarded-Host / X-Forwarded-Proto / X-Forwarded-For (only behind a trusted proxy)
+  trust_proxy_headers: false
+  regex_backtrack_limit: 100000
+
+log:
+  enabled: true
+  # jsonl or sqlite (sqlite needs pdo_sqlite, falls back to jsonl)
+  backend: jsonl
+  retention_days: 30
+  max_size_mb: 50
+  log_bots: true
+  # anonymize = last IPv4 octet / IPv6 suffix set to zero, none = no IP stored
+  ip_mode: anonymize
+  use_default_ignores: true
+  ignore_patterns: []
+
+auto_redirect:
+  enabled: true
+  status: 301
+  # wildcard = one rule /old/* for all descendants, each = one rule per descendant page
+  children: wildcard
+  # ask, gone (410), parent (301 to the parent page) or never
+  on_delete: ask
+
+suggestions:
+  min_score: 0.5
+  bulk_accept_score: 0.9
+
+checker:
+  enabled: true
+  schedule: '30 3 * * 0'
+  timeout: 5
+  max_per_run: 500
+  check_external: true
+  # Minimum seconds between two manual live checks
+  manual_interval: 300
+
+notifications:
+  webhook_url: ''
+  # Prefer the environment variable REDIRECT_MANAGER_WEBHOOK_SECRET over this value
+  webhook_secret: ''
+  not_found_threshold: 25
+  dead_targets: true
+  # none, daily or weekly
+  email_digest: none
+  email_to: ''
+
+stats:
+  keep_days: 90

@@ -8,7 +8,7 @@ namespace Grav\Plugin\RedirectManager\Domain;
  * One evaluated candidate in the rule tester trace.
  *
  * Reasons: matched, no_match, disabled, expired, scheduled, phase, query, host, language,
- * scheme, condition, regex_error.
+ * scheme, condition, regex_error, unsafe_target (the built location failed TargetGuard::isSafeLocation).
  */
 final readonly class TraceStep
 {

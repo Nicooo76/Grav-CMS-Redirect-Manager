@@ -1,0 +1,388 @@
+name: Redirect Manager
+slug: redirect-manager
+type: plugin
+version: 1.0.0
+description: Redirects for Grav 2 with exact, wildcard and regex rules, a 404 monitor with target suggestions, automatic redirects when pages move, import and export for common formats, CLI, REST API, MCP tools and an Admin 2 interface.
+icon: random
+author:
+  name: PixAgentur
+  email: info@pixagentur.com
+  url: https://pixagentur.com
+homepage: https://github.com/pixagentur/grav-plugin-redirect-manager
+keywords: redirect, redirects, 301, 404, seo, migration, htaccess, nginx
+bugs: https://github.com/pixagentur/grav-plugin-redirect-manager/issues
+docs: https://github.com/pixagentur/grav-plugin-redirect-manager/blob/main/README.md
+license: MIT
+
+compatibility:
+  grav: ['2.0']
+
+dependencies:
+  - { name: grav, version: '>=2.1.5' }
+  - { name: php, version: '>=8.3' }
+
+form:
+  validation: strict
+  fields:
+    enabled:
+      type: toggle
+      label: PLUGIN_ADMIN.PLUGIN_STATUS
+      highlight: 1
+      default: 1
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
+
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        redirects_tab:
+          type: tab
+          title: PLUGIN_REDIRECT_MANAGER.CONFIG.TAB_REDIRECTS
+          fields:
+            redirects.enabled:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.REDIRECTS_ENABLED
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.REDIRECTS_ENABLED_HELP
+              highlight: 1
+              default: 1
+              options:
+                1: PLUGIN_ADMIN.ENABLED
+                0: PLUGIN_ADMIN.DISABLED
+              validate:
+                type: bool
+            redirects.default_status:
+              type: select
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.DEFAULT_STATUS
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.DEFAULT_STATUS_HELP
+              default: 0
+              options:
+                0: PLUGIN_REDIRECT_MANAGER.CONFIG.DEFAULT_STATUS_SYSTEM
+                301: '301 Moved Permanently'
+                302: '302 Found'
+                307: '307 Temporary Redirect'
+                308: '308 Permanent Redirect'
+              validate:
+                type: int
+            redirects.keep_language_prefix:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.KEEP_LANGUAGE_PREFIX
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.KEEP_LANGUAGE_PREFIX_HELP
+              default: 1
+              options:
+                1: PLUGIN_ADMIN.YES
+                0: PLUGIN_ADMIN.NO
+              validate:
+                type: bool
+            redirects.cache_control_permanent:
+              type: text
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.CACHE_CONTROL_PERMANENT
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.CACHE_CONTROL_HELP
+              default: 'public, max-age=3600'
+            redirects.cache_control_temporary:
+              type: text
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.CACHE_CONTROL_TEMPORARY
+              default: 'no-store'
+            redirects.max_chain_depth:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.MAX_CHAIN_DEPTH
+              default: 10
+              validate:
+                type: int
+                min: 1
+                max: 50
+            redirects.query_ignore:
+              type: selectize
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.QUERY_IGNORE
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.QUERY_IGNORE_HELP
+              validate:
+                type: commalist
+            redirects.excluded_paths:
+              type: selectize
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.EXCLUDED_PATHS
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.EXCLUDED_PATHS_HELP
+              validate:
+                type: commalist
+
+        security_tab:
+          type: tab
+          title: PLUGIN_REDIRECT_MANAGER.CONFIG.TAB_SECURITY
+          fields:
+            security.allowed_hosts:
+              type: selectize
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.ALLOWED_HOSTS
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.ALLOWED_HOSTS_HELP
+              validate:
+                type: commalist
+            security.allow_any_external:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.ALLOW_ANY_EXTERNAL
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.ALLOW_ANY_EXTERNAL_HELP
+              default: 0
+              options:
+                1: PLUGIN_ADMIN.YES
+                0: PLUGIN_ADMIN.NO
+              validate:
+                type: bool
+            security.trust_proxy_headers:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.TRUST_PROXY_HEADERS
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.TRUST_PROXY_HEADERS_HELP
+              default: 0
+              options:
+                1: PLUGIN_ADMIN.YES
+                0: PLUGIN_ADMIN.NO
+              validate:
+                type: bool
+            security.regex_backtrack_limit:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.REGEX_BACKTRACK_LIMIT
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.REGEX_BACKTRACK_LIMIT_HELP
+              default: 100000
+              validate:
+                type: int
+                min: 1000
+                max: 1000000
+
+        log_tab:
+          type: tab
+          title: PLUGIN_REDIRECT_MANAGER.CONFIG.TAB_LOG
+          fields:
+            log.enabled:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.LOG_ENABLED
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.LOG_ENABLED_HELP
+              default: 1
+              options:
+                1: PLUGIN_ADMIN.ENABLED
+                0: PLUGIN_ADMIN.DISABLED
+              validate:
+                type: bool
+            log.backend:
+              type: select
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.LOG_BACKEND
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.LOG_BACKEND_HELP
+              default: jsonl
+              options:
+                jsonl: PLUGIN_REDIRECT_MANAGER.CONFIG.LOG_BACKEND_JSONL
+                sqlite: PLUGIN_REDIRECT_MANAGER.CONFIG.LOG_BACKEND_SQLITE
+            log.retention_days:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.RETENTION_DAYS
+              default: 30
+              validate:
+                type: int
+                min: 1
+                max: 365
+            log.max_size_mb:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.MAX_SIZE_MB
+              default: 50
+              validate:
+                type: int
+                min: 1
+                max: 2048
+            log.log_bots:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.LOG_BOTS
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.LOG_BOTS_HELP
+              default: 1
+              options:
+                1: PLUGIN_ADMIN.YES
+                0: PLUGIN_ADMIN.NO
+              validate:
+                type: bool
+            log.ip_mode:
+              type: select
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.IP_MODE
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.IP_MODE_HELP
+              default: anonymize
+              options:
+                anonymize: PLUGIN_REDIRECT_MANAGER.CONFIG.IP_MODE_ANONYMIZE
+                none: PLUGIN_REDIRECT_MANAGER.CONFIG.IP_MODE_NONE
+            log.use_default_ignores:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.USE_DEFAULT_IGNORES
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.USE_DEFAULT_IGNORES_HELP
+              default: 1
+              options:
+                1: PLUGIN_ADMIN.YES
+                0: PLUGIN_ADMIN.NO
+              validate:
+                type: bool
+            log.ignore_patterns:
+              type: array
+              value_only: true
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.IGNORE_PATTERNS
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.IGNORE_PATTERNS_HELP
+              placeholder_value: '/old-shop/*'
+
+        auto_tab:
+          type: tab
+          title: PLUGIN_REDIRECT_MANAGER.CONFIG.TAB_AUTO
+          fields:
+            auto_redirect.enabled:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.AUTO_ENABLED
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.AUTO_ENABLED_HELP
+              default: 1
+              options:
+                1: PLUGIN_ADMIN.ENABLED
+                0: PLUGIN_ADMIN.DISABLED
+              validate:
+                type: bool
+            auto_redirect.status:
+              type: select
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.AUTO_STATUS
+              default: 301
+              options:
+                301: '301 Moved Permanently'
+                308: '308 Permanent Redirect'
+                302: '302 Found'
+                307: '307 Temporary Redirect'
+              validate:
+                type: int
+            auto_redirect.children:
+              type: select
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.AUTO_CHILDREN
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.AUTO_CHILDREN_HELP
+              default: wildcard
+              options:
+                wildcard: PLUGIN_REDIRECT_MANAGER.CONFIG.AUTO_CHILDREN_WILDCARD
+                each: PLUGIN_REDIRECT_MANAGER.CONFIG.AUTO_CHILDREN_EACH
+            auto_redirect.on_delete:
+              type: select
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.ON_DELETE
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.ON_DELETE_HELP
+              default: ask
+              options:
+                ask: PLUGIN_REDIRECT_MANAGER.CONFIG.ON_DELETE_ASK
+                gone: PLUGIN_REDIRECT_MANAGER.CONFIG.ON_DELETE_GONE
+                parent: PLUGIN_REDIRECT_MANAGER.CONFIG.ON_DELETE_PARENT
+                never: PLUGIN_REDIRECT_MANAGER.CONFIG.ON_DELETE_NEVER
+            suggestions.min_score:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.SUGGEST_MIN_SCORE
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.SUGGEST_MIN_SCORE_HELP
+              default: 0.5
+              validate:
+                type: number
+                min: 0
+                max: 1
+                step: 0.05
+            suggestions.bulk_accept_score:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.BULK_ACCEPT_SCORE
+              default: 0.9
+              validate:
+                type: number
+                min: 0.5
+                max: 1
+                step: 0.05
+
+        checks_tab:
+          type: tab
+          title: PLUGIN_REDIRECT_MANAGER.CONFIG.TAB_CHECKS
+          fields:
+            checker.enabled:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_ENABLED
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_ENABLED_HELP
+              default: 1
+              options:
+                1: PLUGIN_ADMIN.ENABLED
+                0: PLUGIN_ADMIN.DISABLED
+              validate:
+                type: bool
+            checker.schedule:
+              type: cron
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_SCHEDULE
+              default: '30 3 * * 0'
+            checker.timeout:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_TIMEOUT
+              default: 5
+              validate:
+                type: int
+                min: 1
+                max: 30
+            checker.max_per_run:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_MAX_PER_RUN
+              default: 500
+              validate:
+                type: int
+                min: 1
+                max: 10000
+            checker.check_external:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_EXTERNAL
+              default: 1
+              options:
+                1: PLUGIN_ADMIN.YES
+                0: PLUGIN_ADMIN.NO
+              validate:
+                type: bool
+            checker.manual_interval:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_MANUAL_INTERVAL
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_MANUAL_INTERVAL_HELP
+              default: 300
+              validate:
+                type: int
+                min: 30
+
+        notify_tab:
+          type: tab
+          title: PLUGIN_REDIRECT_MANAGER.CONFIG.TAB_NOTIFY
+          fields:
+            notifications.webhook_url:
+              type: url
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.WEBHOOK_URL
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.WEBHOOK_URL_HELP
+              placeholder: 'https://example.org/hooks/redirects'
+            notifications.webhook_secret:
+              type: password
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.WEBHOOK_SECRET
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.WEBHOOK_SECRET_HELP
+            notifications.not_found_threshold:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.NOT_FOUND_THRESHOLD
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.NOT_FOUND_THRESHOLD_HELP
+              default: 25
+              validate:
+                type: int
+                min: 1
+            notifications.dead_targets:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.NOTIFY_DEAD_TARGETS
+              default: 1
+              options:
+                1: PLUGIN_ADMIN.YES
+                0: PLUGIN_ADMIN.NO
+              validate:
+                type: bool
+            notifications.email_digest:
+              type: select
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.EMAIL_DIGEST
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.EMAIL_DIGEST_HELP
+              default: none
+              options:
+                none: PLUGIN_REDIRECT_MANAGER.CONFIG.EMAIL_DIGEST_NONE
+                daily: PLUGIN_REDIRECT_MANAGER.CONFIG.EMAIL_DIGEST_DAILY
+                weekly: PLUGIN_REDIRECT_MANAGER.CONFIG.EMAIL_DIGEST_WEEKLY
+            notifications.email_to:
+              type: email
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.EMAIL_TO
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.EMAIL_TO_HELP
+            stats.keep_days:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.STATS_KEEP_DAYS
+              default: 90
+              validate:
+                type: int
+                min: 7
+                max: 730

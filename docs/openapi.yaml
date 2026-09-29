@@ -1340,9 +1340,9 @@ paths:
       operationId: markBadgeSeen
       summary: Mark auto rules as seen
       description: |
-        Clears the unseen part of the badge; pending decisions stay counted. There is no request body. Needs
-        `api.redirects.read`, because it changes only the viewer's badge state and no rule.
-      x-permission: api.redirects.read
+        Clears the unseen part of the badge; pending decisions stay counted. There is no request body. The
+        seen state is shared by all users, so it needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
       responses:
         '200':
           description: The badge count after the change.

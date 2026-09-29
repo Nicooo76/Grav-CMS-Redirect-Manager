@@ -37,7 +37,8 @@ final class PermissionsTest extends AutoRedirectTestCase
 
         self::assertSame(200, $reader->get('/redirects/pending')->status);
         self::assertSame(1, $reader->get('/redirects/badge')->data()['count']);
-        self::assertSame(200, $reader->post('/redirects/badge/seen', [])->status, 'marking as seen is a read action');
+        self::assertSame(403, $reader->post('/redirects/badge/seen', [])->status, 'the shared seen state needs manage');
+        self::assertSame(1, $reader->get('/redirects/badge')->data()['count'], 'a reader does not clear the badge');
 
         $id = $reader->get('/redirects/pending')->data()[0]['id'];
         $denied = $reader->post('/redirects/pending/' . $id . '/resolve', ['action' => 'gone']);

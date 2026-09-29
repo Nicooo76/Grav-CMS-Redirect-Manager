@@ -5,7 +5,7 @@
 import { api, isAbort } from '../api';
 import { describeError } from '../errors';
 import { t } from '../i18n.svelte';
-import { bump } from './app.svelte';
+import { bump, can } from './app.svelte';
 import { toast } from './notify.svelte';
 import type { BadgeInfo, PendingAction, PendingDelete, PendingResolveResult, Rule } from '../types';
 
@@ -103,7 +103,8 @@ class AutoStore {
   }
 
   async markSeen(): Promise<void> {
-    if (this.seenBusy || this.unseen === 0) return;
+    // The seen state is shared across users; read-only users leave it for someone who can act on it.
+    if (this.seenBusy || this.unseen === 0 || !can.manage) return;
     this.seenBusy = true;
     try {
       await api.post('/redirects/badge/seen');

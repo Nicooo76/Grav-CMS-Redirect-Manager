@@ -28,7 +28,7 @@ use Psr\Http\Message\ServerRequestInterface;
  *   GET  /redirects/pending               deleted pages waiting for a decision            api.redirects.read
  *   POST /redirects/pending/{id}/resolve  body {action: gone|parent|redirect|dismiss, target?}  api.redirects.manage
  *   GET  /redirects/badge                 {count} = unseen auto rules + pending decisions, null when 0    api.redirects.read
- *   POST /redirects/badge/seen            marks the auto rules as seen                       api.redirects.read
+ *   POST /redirects/badge/seen            marks the auto rules as seen (for everyone)        api.redirects.manage
  */
 final class AutoRedirectController extends AbstractApiController
 {
@@ -112,7 +112,8 @@ final class AutoRedirectController extends AbstractApiController
 
     public function badgeSeen(ServerRequestInterface $request): ResponseInterface
     {
-        $this->requirePermission($request, self::READ);
+        // The seen state is shared by all users, so only people who can act on the rules may clear it.
+        $this->requirePermission($request, self::MANAGE);
         $state = $this->services()->autoState();
         $state->markSeen();
 

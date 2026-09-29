@@ -120,7 +120,9 @@
         <h2 id="rm-unseen-h">{t('AUTO.UNSEEN_TITLE', { n: auto.unseen })}</h2>
         <p class="text-xs muted">{t('AUTO.UNSEEN_TEXT')}</p>
       </div>
-      <Button loading={auto.seenBusy} onclick={() => auto.markSeen()}><Check size={14} />{t('AUTO.MARK_SEEN')}</Button>
+      {#if can.manage}
+        <Button loading={auto.seenBusy} onclick={() => auto.markSeen()}><Check size={14} />{t('AUTO.MARK_SEEN')}</Button>
+      {/if}
     </div>
     <ul class="items">
       {#each auto.unseenRules.slice(0, UNSEEN_LIST_MAX) as r (r.id)}

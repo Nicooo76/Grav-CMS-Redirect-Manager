@@ -33,7 +33,7 @@ jobs:
 
       - name: Release notes from CHANGELOG.md
         run: |
-          # Text between "## <version>" and the next "## " heading (awk, see scripts/changelog-section.sh).
+          # Text of the "# v<version>" section (or the older "## <version>" one), see scripts/changelog-section.sh.
           scripts/changelog-section.sh "${{ steps.version.outputs.version }}" > release-notes.md
           cat release-notes.md
 

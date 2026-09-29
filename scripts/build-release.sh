@@ -7,7 +7,7 @@
 # Result: dist/grav-plugin-redirect-manager-<version>.zip (+ .sha256), top folder redirect-manager/.
 #
 # Checks, in this order (any failure stops the build, nothing in the working tree is changed):
-#   1. <version> is semver, blueprints.yaml `version:` equals it, CHANGELOG.md has a "## <version>" section
+#   1. <version> is semver, blueprints.yaml `version:` equals it, CHANGELOG.md has a section for it ("# v<version>", see scripts/changelog-section.sh)
 #   2. composer validate --strict
 #   3. the admin-next bundles and languages.yaml are up to date: `npm run build` of admin2 (which also compiles
 #      the UI strings into ../languages.yaml) runs in a temp copy, never in place, and the sha256 of both bundles
@@ -58,7 +58,7 @@ BP_VERSION="$(sed -n 's/^version:[[:space:]]*//p' "$ROOT/blueprints.yaml" | head
 echo "blueprints.yaml version $BP_VERSION"
 
 [ -f "$ROOT/CHANGELOG.md" ] || fail "CHANGELOG.md is missing."
-"$ROOT/scripts/changelog-section.sh" "$VERSION" "$ROOT/CHANGELOG.md" > /dev/null || fail "CHANGELOG.md has no '## $VERSION' section with content."
+"$ROOT/scripts/changelog-section.sh" "$VERSION" "$ROOT/CHANGELOG.md" > /dev/null || fail "CHANGELOG.md has no section for $VERSION with content."
 echo "CHANGELOG.md has a section for $VERSION"
 
 for required in redirect-manager.php redirect-manager.yaml blueprints.yaml README.md CHANGELOG.md LICENSE docs/openapi.yaml composer.json composer.lock; do

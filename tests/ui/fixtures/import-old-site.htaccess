@@ -1,0 +1,4 @@
+# alte Website, Weiterleitungen
+Redirect 301 /e2e-team /about
+Redirect 302 /e2e-jobs /info
+Redirect 301 /e2e-presse /kontakt

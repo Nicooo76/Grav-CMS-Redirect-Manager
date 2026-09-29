@@ -1,0 +1,82 @@
+# UI tests (Playwright)
+
+End-to-end tests of the Redirect Manager pages in Admin 2: real browser, real Grav 2, real API plugin, real Admin 2 login. Nothing is mocked.
+
+## Run
+
+```bash
+scripts/setup-test-site.sh                 # once, from the repository root: downloads Grav into .grav/2.2.2 and links the plugin in
+cd tests/ui
+npm ci && npx playwright install chromium
+npx playwright test                        # everything
+npx playwright test rules-crud             # one spec
+npx playwright test --grep-invert @visual  # without the screenshot comparison
+npx playwright test --ui                   # Playwright's UI mode
+```
+
+Needs PHP 8.3 or newer with the extensions Grav needs (`RM_PHP_BIN` selects another binary), Node 22 and the Grav test site.
+
+## What a run does
+
+`global-setup.ts` builds a **fresh Grav site** in a temp directory for every run: `system/`, `vendor/`, `bin/` and the plugins are symlinked to the base site (`.grav/2.2.2`, made by `scripts/setup-test-site.sh`), `user/config`, `user/pages`, `user/accounts` and the theme are copied. Then it
+
+1. starts `php -S` on a free port from 8400 to 8499 (four PHP workers, `PHP_CLI_SERVER_WORKERS=4`),
+2. creates two accounts with generated passwords: `rmadmin` (super admin) and `rmreader` (`api.access` + `api.redirects.read`). The passwords exist only in a `0600` JSON file in the temp directory (or in `RM_CREDENTIALS_FILE`),
+3. seeds the data: the rules come from `fixtures/seed-rules.json` through `bin/plugin redirect-manager import`, plus one loop rule (hand-written into `rules.yaml`, the importer refuses loops) and one conflicting rule (API). Hits and 404 entries are real HTTP requests with fixed paths and user agents (`support/seed.ts`). `bin/grav scheduler --run=redirect-manager-maintenance` folds the hits into the statistics, `bin/plugin redirect-manager suggest --no-accept` generates suggestions,
+4. logs in through the Admin 2 login form once per account and saves the browser state (`auth-admin.json`, `auth-readonly.json`),
+5. copies the seeded data files aside. Before **every test** the `seeded` fixture (`support/test.ts`) restores rules, 404 log, suggestions, statistics, pages and the plugin configuration from that copy. Tests are independent and can run in any order.
+
+`global-teardown.ts` stops the server and removes the temp directory. The API plugin's rate limit (120 requests per minute) is switched off in the test site, otherwise a run trips it.
+
+The tests run with one worker: they change the state of one shared site.
+
+## Environment variables
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `RM_SITE_DIR` | `<repo>/.grav/2.2.2` | Base Grav site that is copied for the run. It is never modified. |
+| `RM_GRAV_VERSION` | `2.2.2` | Version folder under `.grav/`. |
+| `RM_PHP_BIN` | `php` | PHP binary for the server and the CLI calls. |
+| `RM_PORT` | random in 8400-8499 | Fixed port for the test server. |
+| `RM_PHP_WORKERS` | `4` | `PHP_CLI_SERVER_WORKERS` of the test server. |
+| `RM_CREDENTIALS_FILE` | temp directory | Where the generated passwords are written (mode 0600, removed at the end). |
+| `RM_KEEP_SITE` | unset | `1`: keep the temp site after the run (the server is stopped), for looking at logs and data. |
+| `RM_OUTPUT_DIR` | `test-results` | Playwright's output directory. Give parallel runs different ones. |
+| `RM_VISUAL` | auto | `1` forces the screenshot tests, `0` skips them, unset runs them when baselines for the platform exist. |
+
+`RM_BASE_URL` (used by an earlier draft of the CI job that started the site itself) is not needed: the setup starts its own server.
+
+## Specs
+
+`specs/*.spec.ts`, one file per area: rules-crud, bulk, filters, reorder, editor-validation, monitor-404, suggestions, import, tester, keyboard, readonly, pending, widget, visual, a11y. Helpers are in `support/`:
+
+- `test.ts` extends Playwright's `test` with the fixtures `app` (the page: `goto`, `root`, `rows`, `row(source)`, `editor`, `toast()`, `setTheme()`), `api` (REST client with the JWT of the current user), `site` (`reset()`, `setConfig()`, `cli()`, `get()`), `asUser` (`'admin'` or `'readonly'`) and the automatic `seeded`.
+- `app.ts`: the plugin page is a custom element (`grav-redirect-manager--page`) with an open shadow root; Playwright's locators pierce it. Toasts and confirm/form dialogs belong to Admin 2 and sit outside the shadow root.
+- `seed.ts`, `site.ts`: site builder and seed data. The numbers in the specs (32 rules, 7 suggestions, 45 404 hits, ...) come from there.
+
+Rules for new tests: no `waitForTimeout`, arrange state through the API, verify state through the API as well as the UI, never depend on relative times ("now", "2 minutes ago").
+
+## Screenshot tests (`@visual`)
+
+`visual.spec.ts` compares the main screens in light and dark with `toHaveScreenshot` (`maxDiffPixelRatio` 0.005, relative times and the 404 trend chart masked). Baselines are per platform in `specs/__screenshots__/<platform>/visual.spec.ts/`, because font rendering differs between macOS and Linux. The committed baselines are the **darwin** ones.
+
+- Without baselines for the current platform the visual tests are **skipped** (Linux CI today).
+- Update or create baselines: `RM_VISUAL=1 npx playwright test --grep @visual --update-snapshots`, look at the diff, commit.
+- Linux baselines: run the `tests` workflow by hand (Actions, "Run workflow", tick the baselines box). It uploads `visual-baselines-linux`; unpack it into `tests/ui/specs/__screenshots__/linux/` and commit. From then on CI compares them.
+- Baselines change whenever the UI changes on purpose. Regenerate them in the same commit as the UI change.
+
+## Accessibility (`a11y.spec.ts`)
+
+axe-core over every screen in both themes (rules with filter panel and selection, editor for a new and an existing rule, 404 monitor, suggestions, tester, import, export, settings, dashboard widget), WCAG 2.0 to 2.2 A/AA plus best practices. `serious` and `critical` violations fail. The scan covers the plugin's own element only. On the settings screen Admin 2's blueprint renderer (`grav-blueprint-form`) is excluded: its list fields and one select have no accessible names, which the plugin cannot fix. One known finding is filtered by its colours (`isKnownChainContrast` in the spec): the hop list of a chain warning in the editor has contrast 4.25 instead of 4.5 in the light theme (`.chain` in `admin2/src/editor/IssueList.svelte`, muted grey on the warning background). Fix the colour, then delete the filter.
+
+## Known product findings (tests are written against current behaviour, `test.fixme` where noted)
+
+- Focus is not returned to the trigger after the editor closes (2 `fixme` in keyboard.spec.ts).
+- The editor preview shows "Checking..." for good when the API answers `preview.result: null` (sample does not match, e.g. exact source `/blog/*`); the type says null means no match.
+- 404 monitor "Create redirect" for case-only suggestions (`/shop/Zelte`) fails with 422 `self_redirect`; Accept creates a case-sensitive rule and works.
+- The dashboard widget is broken for non-super users: `onApiDashboardWidgets()` passes an array as `authorize`, the API plugin expects a string (1 `fixme` in widget.spec.ts).
+- The "paths removed" toast after Ignore counts log entries, not paths.
+
+## Debugging
+
+`npx playwright show-trace test-results/<test>/trace.zip` (traces are kept on failure), `npx playwright test --ui`, `RM_KEEP_SITE=1` and then `logs/grav.log` and `logs/server.log` in the kept site. A failed run prints the paths.

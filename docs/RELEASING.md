@@ -6,7 +6,7 @@ A release is a git tag `vX.Y.Z` on a commit whose `blueprints.yaml` says `versio
 
 1. Make sure `main` is green (`tests` workflow: PHP 8.3/8.4/8.5, Admin 2 bundles, Playwright, release ZIP).
 2. Bump `version:` in `blueprints.yaml`.
-3. Add a `## X.Y.Z - YYYY-MM-DD` section to `CHANGELOG.md`. Its text becomes the release notes. The heading may also be `## [X.Y.Z]`; the build fails without a section for the version.
+3. Add a section to `CHANGELOG.md` in Grav's format: a `# vX.Y.Z` heading, a `## MM/DD/YYYY` line below it, then items like `1. [](#new)` with `    * ...` lines. Its text becomes the release notes, without the date line. The older `## X.Y.Z - YYYY-MM-DD` heading also works. The build fails without a section for the version.
 4. If `admin2/` changed, run `npm run build` in `admin2/` and commit `admin-next/` and `languages.yaml` (the build also compiles the UI strings into it). The build and CI compare the committed files with a fresh build and fail on any difference.
 5. Build and test locally (see below).
 6. Commit, then tag and push:

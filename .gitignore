@@ -10,4 +10,5 @@
 /tests/ui/node_modules/
 /tests/ui/playwright-report/
 /tests/ui/test-results/
+/tests/ui/test-results-*/
 /vendor/

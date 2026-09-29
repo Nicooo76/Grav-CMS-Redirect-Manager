@@ -1,0 +1,10 @@
+source,target,status,match_type,group,note
+/e2e-alt-eins,/about,301,exact,E2E Import,gueltig
+/e2e-alt-zwei,/info,302,exact,E2E Import,gueltig mit 302
+/e2e-blog/2019/*,/blog/$1,301,wildcard,E2E Import,gueltig als Wildcard
+/e2e-ohne-ziel,,301,exact,E2E Import,Ziel fehlt
+/e2e-shop/(\d+,/shop/$1,301,regex,E2E Import,ungueltiger regulaerer Ausdruck
+/e2e-alt-eins,/faq,301,exact,E2E Import,doppelt in der Datei
+/produkt/zelt-alpin-3,/shop/zelte,301,exact,Shop,gibt es schon als Regel
+/e2e-recht,/info,999,exact,E2E Import,ungueltiger Statuscode
+/e2e-kontakt,/kontakt,307,exact,E2E Import,gueltig mit 307

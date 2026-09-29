@@ -1,0 +1,21 @@
+{
+  "name": "redirect-manager-ui-tests",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Playwright UI tests of the Redirect Manager pages in Admin 2 (fresh Grav test site per run, see README.md).",
+  "scripts": {
+    "test": "playwright test",
+    "test:functional": "playwright test --grep-invert @visual",
+    "test:visual": "playwright test --grep @visual",
+    "update-snapshots": "playwright test --grep @visual --update-snapshots",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "yaml": "^2.9.1"
+  }
+}

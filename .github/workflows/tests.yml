@@ -3,6 +3,12 @@ name: tests
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      visual_baselines:
+        description: "Playwright: create the Linux screenshot baselines and upload them as an artifact"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -168,20 +174,38 @@ jobs:
           path: .grav
           key: grav-${{ env.GRAV_VERSION }}-php8.3-${{ hashFiles('scripts/setup-test-site.sh') }}
 
-      - name: Set up and start the Grav test site
+      # The global setup of the tests builds a fresh copy of this site in a temp directory and starts its own
+      # server on a free port, see tests/ui/README.md.
+      - name: Set up the Grav test site
         if: steps.ui.outputs.run == 'true'
-        run: |
-          scripts/setup-test-site.sh
-          scripts/serve-test-site.sh ".grav/${GRAV_VERSION}" 8100
+        run: scripts/setup-test-site.sh
 
+      # Screenshot tests run when baselines for this platform (tests/ui/specs/__screenshots__/linux) are committed.
       - name: Playwright
-        if: steps.ui.outputs.run == 'true'
+        if: steps.ui.outputs.run == 'true' && !inputs.visual_baselines
         working-directory: tests/ui
         env:
-          RM_BASE_URL: http://127.0.0.1:8100
           RM_SITE_DIR: ${{ github.workspace }}/.grav/${{ env.GRAV_VERSION }}
-          RM_CREDENTIALS_FILE: ${{ github.workspace }}/.grav/credentials.env
+          RM_CREDENTIALS_FILE: ${{ runner.temp }}/rm-ui-credentials.json
         run: npx playwright test
+
+      - name: Playwright, create the Linux screenshot baselines
+        if: steps.ui.outputs.run == 'true' && inputs.visual_baselines
+        working-directory: tests/ui
+        env:
+          RM_SITE_DIR: ${{ github.workspace }}/.grav/${{ env.GRAV_VERSION }}
+          RM_CREDENTIALS_FILE: ${{ runner.temp }}/rm-ui-credentials.json
+          RM_VISUAL: "1"
+        run: npx playwright test --grep @visual --update-snapshots
+
+      - name: Upload the Linux baselines
+        if: steps.ui.outputs.run == 'true' && inputs.visual_baselines
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines-linux
+          path: tests/ui/specs/__screenshots__/linux
+          retention-days: 14
+          if-no-files-found: error
 
       - name: Upload the report
         if: failure() && steps.ui.outputs.run == 'true'
@@ -191,7 +215,6 @@ jobs:
           path: |
             tests/ui/playwright-report
             tests/ui/test-results
-            .grav/${{ env.GRAV_VERSION }}/logs
           retention-days: 7
           if-no-files-found: ignore
 

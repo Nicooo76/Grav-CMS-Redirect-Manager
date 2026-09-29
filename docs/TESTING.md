@@ -6,7 +6,7 @@ Three layers, each answers a different question.
 |---|---|---|
 | Unit (`tests/Unit`, ~4300 tests, ~25 s) | `vendor/` only | Does each class do what it says, without Grav? |
 | Integration (`tests/Integration`, ~410 tests, ~7 min) | a Grav test site in `.grav/`, `curl`, `php -S` | Does the plugin work inside real Grav 2 over real HTTP and CLI? |
-| UI (`tests/ui`, Playwright) | Node, a running site | Does the Admin 2 screen work? Not covered here. |
+| UI (`tests/ui`, Playwright) | Node, Chromium, the Grav test site in `.grav/` | Does the Admin 2 screen work in a real browser against a real Grav 2 (rules, 404 monitor, suggestions, import/export, tester, read-only user, pending decisions, widget, screenshots, accessibility)? See `tests/ui/README.md`. |
 
 ## Running
 
@@ -28,6 +28,17 @@ composer test:all             # composer test + integration
 Groups (`#[Group]`) cut across both suites: `--group benchmark` runs the matcher and analysis benchmarks (`tests/Unit/Matching/MatcherBenchmarkTest.php`, `tests/Unit/Analysis/AnalysisPerformanceTest.php`; they are part of the unit suite too, `--exclude-group benchmark` skips them), `--group performance` the suggester timing test, `--group release` the release-package checks (`scripts/build-release.sh`, `scripts/test-release.sh`, see `docs/RELEASING.md`; only present when those tests exist). Others: `api`, `app`, `auto`, `cli`, `grav`, `import`, `jobs`, `notfound`, `scheduler`, `stats`, `storage`, `integration`.
 
 Unit tests run on PHP 8.3, 8.4 and 8.5: `/opt/homebrew/opt/php@8.3/bin/php vendor/bin/phpunit --testsuite unit`. PHPUnit is configured `failOnWarning`, `failOnRisky`, `failOnDeprecation`.
+
+UI suite (once: `scripts/setup-test-site.sh`, as above):
+
+```bash
+cd tests/ui
+npm ci && npx playwright install chromium
+npx playwright test                        # builds a fresh site in a temp dir, seeds it, runs every spec
+npx playwright test --grep-invert @visual  # without the screenshot comparison
+```
+
+Every run builds its own copy of the test site, starts `php -S` on a port from 8400 to 8499, creates an admin and a read-only user with generated passwords, seeds rules, hits, 404 entries and suggestions, and restores that state before every test. The base site is never modified. Screenshot baselines are per platform (`tests/ui/specs/__screenshots__/<platform>/`); the committed ones are darwin. Without baselines for the platform the `@visual` tests are skipped, so CI (Linux) runs them only after the Linux baselines were generated with the manually started `tests` workflow ("Run workflow", tick the baselines box) and committed. Details, environment variables (`RM_SITE_DIR`, `RM_PHP_BIN`, `RM_PORT`, `RM_VISUAL`, ...) and how to update baselines: `tests/ui/README.md`.
 
 ### Environment variables
 

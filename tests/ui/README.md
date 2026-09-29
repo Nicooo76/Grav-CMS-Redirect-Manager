@@ -48,13 +48,29 @@ The tests run with one worker: they change the state of one shared site.
 
 ## Specs
 
-`specs/*.spec.ts`, one file per area: rules-crud, bulk, filters, reorder, editor-validation, monitor-404, suggestions, import, tester, keyboard, readonly, pending, widget, visual, a11y. Helpers are in `support/`:
+`specs/*.spec.ts`, one file per area: rules-crud, bulk, filters, reorder, editor-validation, monitor-404, suggestions, import, tester, keyboard, readonly, pending, widget, visual, a11y, and the audit follow-ups:
+
+| Spec | What it drives |
+|---|---|
+| `admin2-page-editor` | Admin 2's own page editor (folder name, Delete Page) and what the plugin does with it: unseen panel, sidebar badge, 301 on the public site, pending panel |
+| `german` | the admin user's language is German: every tab, the editor, the pending panel and the widget; no raw keys, English fallbacks or humanized keys anywhere in the shadow DOM |
+| `tablet` | 768 x 1024 and 1024 x 768: collapsed columns, full-width editor, no horizontal page scroll, every tab, axe |
+| `large-list` | 10,000 rules (CLI import): virtual window, scrolling to the end, frame times, search, filter and sort speed |
+| `rollback` | `page.route` holds the API answer and then fails it (500, 409): inline edit, switch, bulk, reorder, delete, suggestions, 404 monitor |
+| `import-advanced` | a real `drop` on the drop zone, manual CSV column mapping, Grav's `site.redirects` and `site.routes` panel |
+| `editor-page-target` | target type "Page" with the search picker, the rule following a renamed page, the status code help |
+| `badges-check` | row badges, "Check now" against the site itself, the dead target badge, the widget after a check (tile, sparklines) |
+| `views` | 404 row sparkline, column chooser, "Export selected", empty states, skeleton loaders, slide-over motion |
+| `host-tokens` | computed styles of the plugin equal the host's CSS variables (light, dark, accent and font change), Lucide icons |
+
+Helpers are in `support/`:
 
 - `test.ts` extends Playwright's `test` with the fixtures `app` (the page: `goto`, `root`, `rows`, `row(source)`, `editor`, `toast()`, `setTheme()`), `api` (REST client with the JWT of the current user), `site` (`reset()`, `setConfig()`, `cli()`, `get()`), `asUser` (`'admin'` or `'readonly'`) and the automatic `seeded`.
 - `app.ts`: the plugin page is a custom element (`grav-redirect-manager--page`) with an open shadow root; Playwright's locators pierce it. Toasts and confirm/form dialogs belong to Admin 2 and sit outside the shadow root.
+- `i18n-scan.ts`: every text of the shadow DOM, and the leak check for the German tests (raw keys, English strings, humanized keys). `spark.ts`: the sparkline formula, written down again for the tests.
 - `seed.ts`, `site.ts`: site builder and seed data. The numbers in the specs (32 rules, 7 suggestions, 45 404 hits, ...) come from there.
 
-Rules for new tests: no `waitForTimeout`, arrange state through the API, verify state through the API as well as the UI, never depend on relative times ("now", "2 minutes ago").
+Rules for new tests: no `waitForTimeout`, arrange state through the API, verify state through the API as well as the UI, never depend on relative times ("now", "2 minutes ago"). What the `seeded` fixture does not restore has to be put back by the test itself, in `afterEach` or `finally`: the admin account's preferences (language, accent, font, colour mode: `DELETE /admin-next/preferences/user`), `user/config/site.yaml` (and `cache/compiled` after writing it, Grav's compiled configuration is keyed by file times with second resolution).
 
 ## Screenshot tests (`@visual`)
 
@@ -62,7 +78,18 @@ Rules for new tests: no `waitForTimeout`, arrange state through the API, verify 
 
 - Without baselines for the current platform the visual tests are **skipped** (Linux CI today).
 - Update or create baselines: `RM_VISUAL=1 npx playwright test --grep @visual --update-snapshots`, look at the diff, commit.
-- Linux baselines: run the `tests` workflow by hand (Actions, "Run workflow", tick the baselines box). It uploads `visual-baselines-linux`; unpack it into `tests/ui/specs/__screenshots__/linux/` and commit. From then on CI compares them.
+- Linux baselines: run the `tests` workflow by hand (Actions, "Run workflow", tick the baselines box). It uploads `visual-baselines-linux`; unpack it into `tests/ui/specs/__screenshots__/linux/` and commit. From then on CI compares them. **No Linux baselines are committed yet.**
+- Linux baselines on a machine with Docker (not run yet: the Docker Desktop engine of the machine that wrote this was down and could not be started from the session, so treat the recipe as unverified). The image must match `@playwright/test` (1.63.0), PHP comes from apt, the base site is a copy of `.grav/2.2.2` whose `user/plugins/redirect-manager` is a real directory, not the symlink (the link target does not exist in the container):
+
+  ```bash
+  docker run --rm --ipc=host -v "$PWD":/work -v /path/to/base-site-copy:/site-base:ro \
+    -e RM_SITE_DIR=/site-base -e RM_VISUAL=1 -e RM_OUTPUT_DIR=/tmp/pw-out -w /work/tests/ui \
+    mcr.microsoft.com/playwright:v1.63.0-noble bash -c '
+      apt-get update -qq && apt-get install -y -qq php8.3-cli php8.3-curl php8.3-gd php8.3-mbstring php8.3-xml php8.3-zip php8.3-intl php8.3-sqlite3 &&
+      npx playwright test --grep @visual --update-snapshots && npx playwright test --grep @visual'
+  ```
+
+  Look at the 14 PNGs in `specs/__screenshots__/linux/visual.spec.ts/` before committing, and run the CI workflow once to see that the runner's fonts give the same pixels (fallback glyphs such as arrows and quotes can differ between the image and `ubuntu-latest`).
 - Baselines change whenever the UI changes on purpose. Regenerate them in the same commit as the UI change.
 
 ## Accessibility (`a11y.spec.ts`)

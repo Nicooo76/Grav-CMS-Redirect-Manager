@@ -454,7 +454,9 @@ input[type='datetime-local'] {
   background: var(--background);
   border-inline-start: 1px solid var(--border);
   box-shadow: var(--rm-shadow-xl);
-  animation: rm-slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  /* No `forwards`: a kept `translate` (even 0 0) makes the panel the containing block of position:fixed popovers
+     (combobox, menus), which then open by the panel's offset and outside the window. */
+  animation: rm-slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .so-panel.closing {
   animation: rm-slide-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;

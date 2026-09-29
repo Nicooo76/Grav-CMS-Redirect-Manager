@@ -69,7 +69,8 @@ test.describe('rules: create, edit, delete', () => {
     await app.row('/g-kontakt').getByRole('button', { name: /^Actions for/ }).click();
     await app.root.getByRole('menuitem', { name: 'Delete' }).click();
     await expect(app.row('/g-kontakt')).toHaveCount(0);
-    expect((await api('GET', '/redirects/rules?q=/g-kontakt')).data).toHaveLength(0);
+    // the row goes at once (optimistic), the server a moment later
+    await expect.poll(async () => (await api('GET', '/redirects/rules?q=/g-kontakt')).data).toHaveLength(0);
 
     await app.toasts.getByRole('button', { name: 'Undo' }).click();
     await expect(app.row('/g-kontakt')).toBeVisible();

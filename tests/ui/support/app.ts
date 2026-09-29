@@ -68,7 +68,8 @@ export class App {
   /** the page is mounted and nothing is loading */
   async ready(): Promise<void> {
     await expect(this.root).toBeVisible({ timeout: 30_000 });
-    await expect(this.root.getByRole('navigation', { name: 'Redirect manager sections' })).toBeVisible();
+    // the tab bar (its name is translated, so the language must not matter here)
+    await expect(this.root.getByRole('navigation').first()).toBeVisible();
     await expect(this.root.locator('[aria-busy="true"]')).toHaveCount(0);
   }
 

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="{{ html_lang|default('en') }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title>{{ 'PLUGIN_REDIRECT_MANAGER.FRONTEND.GONE_TITLE'|t }}{% if site.title %} | {{ site.title }}{% endif %}</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 16px/1.5 system-ui, sans-serif; background: Canvas; color: CanvasText; }
+        main { max-width: 32rem; padding: 2rem 1.5rem; }
+        p.code { margin: 0 0 .5rem; font-size: .875rem; letter-spacing: .08em; opacity: .6; }
+        h1 { margin: 0 0 1rem; font-size: 1.75rem; line-height: 1.2; }
+        a { color: LinkText; }
+    </style>
+</head>
+<body>
+    <main>
+        <p class="code">{{ redirect_status|default(410) }}</p>
+        <h1>{{ 'PLUGIN_REDIRECT_MANAGER.FRONTEND.GONE_TITLE'|t }}</h1>
+        <p>{{ 'PLUGIN_REDIRECT_MANAGER.FRONTEND.GONE_TEXT'|t }}</p>
+        <p><a href="{{ home_url|default('/') }}">{{ 'PLUGIN_REDIRECT_MANAGER.FRONTEND.HOME_LINK'|t }}</a></p>
+    </main>
+</body>
+</html>

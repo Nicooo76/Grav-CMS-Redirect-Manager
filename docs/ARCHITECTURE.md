@@ -19,8 +19,9 @@ classes/
   ImportExport/             Importer, Exporter, one adapter per format. No Grav (Symfony YAML only).
   Check/                    TargetChecker (HEAD requests, Symfony HttpClient interface). No Grav.
   Notify/                   WebhookNotifier (HMAC), DigestBuilder. No Grav.
-  Grav/                     Everything that touches Grav: RequestContextFactory, RedirectResponder,
-                            GravPageIndexBuilder, AutoRedirectListener, TwigExtension, ServiceFactory, Scheduler jobs.
+  Grav/                     Everything that touches Grav: RequestContextFactory, RedirectResponder (pure, returns ResponseData),
+                            ServiceFactory (pure, built from config arrays), RedirectLookup, RuleEvents, TwigExtension,
+                            GravPageIndexBuilder + PageIndexCache, AutoRedirectListener, Scheduler jobs.
   Api/                      ApiController (extends the API plugin's AbstractApiController).
   Cli/                      CliCommands (shared logic for cli/*Command.php).
 cli/                        Symfony console commands for bin/plugin redirect-manager ...
@@ -75,11 +76,22 @@ See `Domain/Rule.php`. Serialized keys are snake_case. Important semantics:
 
 ## Request flow (frontend)
 
-1. `Grav\Events\PluginsLoadedEvent` (skips the API route and the admin route): `RequestContextFactory` builds the context from the PSR request (strips base path and language prefix itself), loads compiled rules, `Matcher::match(ctx, MatchPhase::Early)`.
-   - 30x: `$grav->close()` with our own PSR-7 response. No session exists yet, so the redirect carries no cookie and gets the configured `Cache-Control`. This also runs before Grav's trailing-slash redirect, so there is no double hop.
-   - 410 / 451 / pass-through: remember the result and finish it in `onPagesInitialized`, where Twig and pages exist (see GRAV2-NOTES.md, section 2).
-2. `onPageNotFound` (priority 10, above the error plugin): log the 404 unless ignored, then `Matcher::match(ctx, MatchPhase::NotFound)` for "only if not found" rules.
-3. Hits are appended with `HitRecorder` (one line per hit); aggregation happens in the scheduler, the admin API and the CLI.
+Everything below is wrapped in try/catch: a failure is logged to `grav.log` and Grav carries on. A broken `rules.yaml` keeps the last compiled rules in force (or an empty set) and logs once per change.
+
+1. `Grav\Events\PluginsLoadedEvent` (priority 10000, not in CLI): `ServiceFactory::enabled()`, then `RequestContextFactory` builds the context from the PSR request (strips base path and language prefix itself; invalid paths mean "never redirect"). Excluded paths (API route, Admin 2 route, `redirects.excluded_paths`, `/user/ /system/ /vendor/ /cache/ /logs/`) end the flow for the request. Then `CompiledRuleCache::load()` (one `stat()` plus one include when warm) and `Matcher::match(ctx, MatchPhase::Early)`.
+   - The event `onRedirectMatched` fires (payload `result`, `context`, `request`, `cancel`); listeners may replace `result` or cancel.
+   - 30x: hits are appended (one line per applied rule), `RedirectResponder` builds the response (Location with base path and language prefix, `Cache-Control` permanent or temporary, `X-Redirect-By`, empty body) and `$grav->close()` sends it. No session exists yet, so no cookie and cacheable. This also runs before Grav's trailing-slash redirect, so there is no double hop.
+   - 410 / 451 / pass-through: the result is kept on the plugin and finished in step 2.
+2. `onPagesInitialized` (priority 10): 410/451 render `redirect-manager/gone.html.twig` / `unavailable.html.twig` (a theme overrides them with its own `templates/redirect-manager/...`; plugin path is added last in `onTwigTemplatePaths`) and close with that status. The session has started by now, so `Set-Cookie`, `Expires`, `Pragma` are removed before closing. Pass-through: `unset($grav['page']); $grav['page'] = $pages->find(target)`; a target that is not a routable page logs a warning, records no hit and falls through to the normal 404.
+3. `onPageNotFound` (priority 10, above the error plugin): `NotFoundLogger::log()` (skipped for ignored paths, non-GET/HEAD, logging off, bots when `log_bots: false`), event `onNotFoundLogged` (payload `entry`), then `Matcher::match(ctx, MatchPhase::NotFound)` for "only if not found" rules with the same `onRedirectMatched` event. 30x and 410/451 are sent like in step 1/2 with the session headers stripped; pass-through sets `$event->page` and stops propagation so the error plugin does not replace it. Nothing matched: no `stopPropagation`.
+4. Hits are appended with `HitRecorder` (one line per hit); aggregation happens in the scheduler, the admin API and the CLI. Retention purges of the 404 log are not run on requests either.
+5. Twig (`onTwigInitialized`): function `redirect_for(url)` returns `{status, location, rule_id}` or null, filter `redirect_target` returns the location or its input. Both are read-only (no hit, nothing sent), consider only rules without "only if not found", and are on the sandbox allow-list (`onBuildTwigSandboxPolicy`).
+
+Events for other plugins are fired through `Grav\RuleEvents` (`saved()`, `matched()`, `notFoundLogged()`); the API controller and the CLI call `saved($rule, $previous, $action)` after they wrote `rules.yaml`.
+
+## Integration tests
+
+`scripts/setup-test-site.sh` downloads Grav into `.grav/<version>` (gitignored) and links the plugin in. `tests/Integration` copies `user/` of that site per test class into a temp directory (system, vendor, bin and the plugins are symlinks), starts `php -S` on a free port (binary from `RM_PHP_BIN`), writes rules and config per scenario and checks real HTTP answers with curl. The Grav cache is off in the copy, so config and page edits apply at once; the plugin's compiled rule cache is not affected. PHPStan scans `.grav/2.2.2/system/src` and `.grav/2.2.2/vendor` for the Grav, Nyholm and Twig classes.
 
 ## Conventions for all code
 

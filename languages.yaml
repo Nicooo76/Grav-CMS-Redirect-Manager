@@ -88,6 +88,12 @@ en:
       EMAIL_TO: 'Email Address'
       EMAIL_TO_HELP: 'Recipient email address for digests. Required if digest is enabled.'
       STATS_KEEP_DAYS: 'Statistics Retention (Days)'
+    FRONTEND:
+      GONE_TITLE: 'This page has been removed'
+      GONE_TEXT: 'The page you are looking for is permanently gone and will not come back.'
+      UNAVAILABLE_TITLE: 'Unavailable for legal reasons'
+      UNAVAILABLE_TEXT: 'This page cannot be shown because of a legal demand.'
+      HOME_LINK: 'Go to the home page'
     PERMISSIONS:
       GROUP: Redirects
       READ: 'View redirects and logs'
@@ -183,6 +189,12 @@ de:
       EMAIL_TO: 'E-Mail-Adresse'
       EMAIL_TO_HELP: 'Empfänger-E-Mail-Adresse für Zusammenfassungen. Erforderlich, wenn die Zusammenfassung aktiviert ist.'
       STATS_KEEP_DAYS: 'Aufbewahrungsdauer für Statistiken (Tage)'
+    FRONTEND:
+      GONE_TITLE: 'Diese Seite wurde entfernt'
+      GONE_TEXT: 'Die gesuchte Seite existiert nicht mehr und kommt auch nicht zurück.'
+      UNAVAILABLE_TITLE: 'Aus rechtlichen Gründen nicht verfügbar'
+      UNAVAILABLE_TEXT: 'Diese Seite darf wegen einer rechtlichen Anordnung nicht angezeigt werden.'
+      HOME_LINK: 'Zur Startseite'
     PERMISSIONS:
       GROUP: Weiterleitungen
       READ: 'Weiterleitungen und Protokolle anzeigen'

@@ -96,7 +96,7 @@ Machine-readable description: `docs/openapi.yaml`. MCP tool mapping: `mcp.yaml`.
 
 | Event | Payload | When |
 |---|---|---|
-| `onRedirectMatched` | `result` (MatchResult), `context` (RequestContext) | Before the redirect response is sent. Listeners may replace `result` or set `cancel: true`. |
+| `onRedirectMatched` | `result` (MatchResult), `context` (RequestContext), `request` (RequestContextResult: base path, language prefix, method), `cancel` (false) | Before the response is sent (redirect, 410, 451, pass-through). Listeners may replace `result` or set `cancel: true`. |
 | `onRedirectRuleSaved` | `rule`, `previous` (null on create), `action` (`create\|update\|delete\|import\|auto`) | After rules.yaml was written. |
 | `onNotFoundLogged` | `entry` (NotFoundEntry) | After a 404 was written to the log. |
 | `onSuggestionCreated` | `suggestion` (record array) | When a stored suggestion is created or improved. |

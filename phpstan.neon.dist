@@ -4,5 +4,10 @@ parameters:
         - classes
         - cli
         - redirect-manager.php
+    # Grav, Nyholm PSR-7, Twig and RocketTheme are not in vendor/: scan the test site that
+    # scripts/setup-test-site.sh creates (also used in CI).
+    scanDirectories:
+        - .grav/2.2.2/system/src
+        - .grav/2.2.2/vendor
     tmpDir: build/phpstan
     treatPhpDocTypesAsCertain: false

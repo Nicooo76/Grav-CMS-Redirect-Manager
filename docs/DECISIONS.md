@@ -53,3 +53,27 @@ The API plugin's `openapi.yaml` covers core routes only and has no extension hoo
 ## D-013: MCP tools through `mcp.yaml`
 
 grav-mcp reads tool manifests from enabled plugins. The plugin ships `mcp.yaml` with prefix `redirects`, which yields the tool names from the brief (`redirects_list`, `redirects_create`, `redirects_test`, `redirects_404_top`, `redirects_suggest`, `redirects_import`). Imports use a JSON body with the file content as a string, because MCP manifests do not support multipart.
+
+## D-014: Automatic redirects are planned by a pure planner, applied in one transaction
+
+`Auto/AutoRedirectPlanner` turns two page snapshots and the existing rules into a plan; `AutoRedirectApplier` runs it inside `RuleRepository::transaction()`. Rules made by the feature have `origin: auto` and `target_type: page` (exact) or `route` (wildcard `/old/* -> /new/$1`, which needs `$1`). What the planner does beyond "old -> new":
+
+- **Language:** one rule per group of languages with the same old and new route; the language condition is set only when the group does not cover every language of the page.
+- **Moving back:** an auto rule from the new route to the old one is removed and nothing is created. Any auto rule whose source is the new route (a live page now) is removed.
+- **Chains:** auto rules and rules with `target_type: page` that point at the old route (or below it) get the new target, so `A -> B` and `B -> C` end as `A -> C` and `B -> C`. Rules with a plain route target are never touched.
+- **Manual rules win:** an enabled manual rule with the same source blocks the auto rule (noted in grav.log); a manual rule back from the new route is a loop and blocks it too. Routes another page serves are never used as a source (reorganize swaps).
+- **Delete:** `gone` = 410 for the route and a wildcard (or one rule per descendant with children mode `each`) for descendants; `parent` = 301 to the nearest ancestor that exists (the home page for a top-level page); `ask` = a pending decision in `auto-state.json`; `never` = nothing. Auto rules that pointed at the deleted page become 410 or follow the parent.
+
+Change it: the plan format (`AutoPlan`) is the seam; the applier never decides.
+
+## D-015: Old routes of a single move are derived, not captured
+
+`POST /pages/{route}/move` fires only `onApiPageMoved` after the folder was renamed and the page tree re-initialised, so the page's old per-language routes cannot be read any more (`translatedLanguages()` reads the files). `MoveDeriver` rebuilds them from the old parent (still in place), the slug per language (unchanged by a move) and, for a move that renames the folder, the old slug. Exact for moves and for renames on sites without per-language slugs; a move that renames a page with translated slugs is exact only for the languages whose slug follows the folder. Reorganize, update and delete have before events and are exact. Changing it would need a before event for move in the API plugin.
+
+## D-016: Deleting one language of a page does nothing
+
+`DELETE /pages/{route}?lang=de` on a page that keeps other translations removes only one file. Grav serves the default-language content in a missing language unless configured otherwise, so a 410 or a redirect could hide a live page. The feature leaves it alone; the 404 monitor covers the case where the URL really dies. Deleting the last translation is a normal delete.
+
+## D-017: Scheduler jobs are static callables, one per concern
+
+Callable jobs run inside the scheduler process, where Grav and the plugin are loaded. Three jobs instead of one so that schedules and enabled states (`user/config/scheduler.yaml`) are independent: hourly maintenance, the link check on `checker.schedule`, and the digest. A step of the maintenance job that fails is recorded and the next still runs. The digest goes through `$grav['Email']`; without the email plugin (or with engine `none`) it logs and does nothing. Jobs cannot see the request URL, so live checks and mail links use the `base_url` setting.

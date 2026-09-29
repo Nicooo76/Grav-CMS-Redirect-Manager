@@ -21,7 +21,13 @@ classes/
   Notify/                   WebhookNotifier (HMAC), DigestBuilder. No Grav.
   Grav/                     Everything that touches Grav: RequestContextFactory, RedirectResponder (pure, returns ResponseData),
                             ServiceFactory (pure, built from config arrays), RedirectLookup, RuleEvents, TwigExtension,
-                            GravPageIndexBuilder + PageIndexCache, AutoRedirectListener, Scheduler jobs.
+                            GravPageIndexBuilder + PageIndexCache, SchedulerJobs (job registration and entry points).
+  Auto/                     Automatic redirects. Grav-free: PageSnapshot/PageNode, AutoRedirectPlanner (plan = rules to
+                            create, update, delete, notes, pending decision), AutoRedirectApplier (runs a plan in
+                            RuleRepository::transaction, fires events, updates the state), AutoState, MoveDeriver,
+                            RouteChangeDetector. Touch Grav: AutoRedirectListener (API page events), PageSnapshotter.
+  Jobs/                     The scheduler jobs' logic without Grav: MaintenanceJob, SuggestionRefresher, CheckTargetsJob,
+                            DigestJob. SchedulerJobs wires them to the plugin's services.
   Api/                      ApiController (extends the API plugin's AbstractApiController).
   Cli/                      CliCommands (shared logic for cli/*Command.php).
 cli/                        Symfony console commands for bin/plugin redirect-manager ...
@@ -47,7 +53,8 @@ All under `user://data/redirect-manager/` (per site, so Grav multisite setups ke
 | `404-state.json` | JSON | NotFound state | Paths marked done, with time |
 | `suggestions.json` | JSON | SuggestionStore | Open / accepted / rejected suggestions |
 | `target-checks.json` | JSON | TargetChecker | Last live-check result per rule |
-| `auto-state.json` | JSON | AutoRedirectListener | Routes captured in "before" API events |
+| `auto-state.json` | JSON | AutoState | Deleted pages waiting for a decision (with the captured subtree), ids of unseen auto rules (sidebar badge), the last decisions |
+| `notify-state.json` | JSON | ThresholdTracker | 404 paths and dead targets already reported by webhook (cooldown, relapse) |
 
 Suggested `.gitignore` for Git Sync users: `hits/`, `404/`, `404.sqlite` (logs are not content).
 
@@ -88,6 +95,21 @@ Everything below is wrapped in try/catch: a failure is logged to `grav.log` and 
 5. Twig (`onTwigInitialized`): function `redirect_for(url)` returns `{status, location, rule_id}` or null, filter `redirect_target` returns the location or its input. Both are read-only (no hit, nothing sent), consider only rules without "only if not found", and are on the sandbox allow-list (`onBuildTwigSandboxPolicy`).
 
 Events for other plugins are fired through `Grav\RuleEvents` (`saved()`, `matched()`, `notFoundLogged()`); the API controller and the CLI call `saved($rule, $previous, $action)` after they wrote `rules.yaml`.
+
+## Automatic redirects (API page events)
+
+`AutoRedirectListener` subscribes to the API plugin's events (`onApiBeforePageUpdate`, `onApiPageUpdated`, `onApiPageMoved`, `onApiBeforePageDelete`, `onApiPageDeleted`, `onApiBeforePagesReorganize`, `onApiPagesReorganized`; batch variants carry `method: batch`). The plugin class only forwards them.
+
+- Update: the before event captures a `PageSnapshot` only when the request body changes `header.slug` or `header.routes` (`RouteChangeDetector`), so autosaves cost nothing. The after event reloads the page tree from disk (`Pages::reset()`) and compares.
+- Move (`POST /pages/{route}/move`): the API has no before event, and the folder is renamed before the event fires. The old routes are derived from the old parent (still in place) and the slug per language (`MoveDeriver`).
+- Reorganize: exact. The before event hands over the page objects, the after event the final folders.
+- Delete: the before event snapshots the subtree (with the ancestors for the "parent" policy), the after event applies the policy. Deleting one language of a page that keeps other translations does nothing.
+- `AutoRedirectPlanner` is pure. `AutoRedirectApplier` plans inside `RuleRepository::transaction()` and, after the write, invalidates the compiled cache, fires `onRedirectRuleSaved` (`auto` for created and re-targeted rules, `delete` for removed ones), records unseen ids and logs one line to grav.log.
+- Every handler catches `Throwable`: a failure is logged and never reaches the API request.
+
+## Scheduler
+
+`onSchedulerInitialized` registers three jobs (static `Class::method` callables in `Grav/SchedulerJobs`): `redirect-manager-maintenance` (hourly), `redirect-manager-check-targets` (`checker.schedule`, when `checker.enabled`) and `redirect-manager-digest` (07:00 daily or Monday, when `notifications.email_digest` is not `none`). Callable jobs run inside the scheduler process, so Grav and the plugin are loaded. Run one now: `bin/grav scheduler --run=<job id>`; list them: `bin/grav scheduler --jobs`. Jobs have no request to read the site URL from: set `base_url` in the plugin config (else `system.custom_base_url`, else `http://localhost`).
 
 ## Integration tests
 

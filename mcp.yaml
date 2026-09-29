@@ -1,0 +1,141 @@
+# MCP tools for AI clients (grav-mcp reads this file through GET /api/v1/mcp/tools).
+# Tool names are {prefix}_{name}. The name of a tool must start with a letter, so the 404 report is "top_404".
+version: 1
+prefix: redirects
+tools:
+  - name: list
+    title: List redirect rules
+    description: >
+      List redirect rules with search, filters and paging. Each rule comes with hit statistics, badges
+      (active, disabled, expired, scheduled, chain, loop, conflict, dead_target, unused) and analysis issues.
+      Sorted by priority (highest first) unless "sort" says otherwise.
+    method: GET
+    path: /redirects/rules
+    permission: api.redirects.read
+    annotations:
+      readOnly: true
+    input:
+      type: object
+      properties:
+        q: { type: string, description: "Search in source, target, note, group and tags" }
+        match_type: { type: string, enum: [exact, wildcard, regex] }
+        status: { type: integer, enum: [200, 301, 302, 307, 308, 410, 451], description: "HTTP status of the rule (200 = serve the target page under the old URL)" }
+        state: { type: string, enum: [active, disabled, expired, scheduled] }
+        badge: { type: string, enum: [active, disabled, expired, scheduled, chain, loop, conflict, dead_target, unused] }
+        group: { type: string }
+        unused_days: { type: integer, minimum: 1, description: "Only rules without a hit for this many days" }
+        sort: { type: string, enum: [priority, source, target, status, hits, last_hit, created_at, updated_at], default: priority }
+        dir: { type: string, enum: [asc, desc] }
+        page: { type: integer, minimum: 1, default: 1 }
+        per_page: { type: integer, minimum: 1, maximum: 200, default: 25 }
+
+  - name: create
+    title: Create a redirect rule
+    description: >
+      Create a redirect rule. Source and target are paths like /old-page and /new-page; wildcard rules use "*" and
+      "$1" in the target, regex rules capture groups. The rule is validated (loops, unsafe targets and invalid
+      regular expressions are rejected, chains and conflicts come back as warnings in "issues"). Set dry_run to
+      true to validate without saving. The status defaults to the site's redirect default (usually 301).
+    method: POST
+    path: /redirects/rules
+    permission: api.redirects.manage
+    query: [dry_run]
+    input:
+      type: object
+      required: [source]
+      properties:
+        source: { type: string, description: "Path to redirect from, e.g. /old-page. Wildcard: /blog/*. Regex: a PCRE pattern without delimiters." }
+        target: { type: string, description: "Path or absolute URL to redirect to. Empty for status 410 and 451." }
+        match_type: { type: string, enum: [exact, wildcard, regex], default: exact }
+        status: { type: integer, enum: [200, 301, 302, 307, 308, 410, 451] }
+        note: { type: string }
+        group: { type: string }
+        enabled: { type: boolean, default: true }
+        priority: { type: integer, description: "Higher numbers are evaluated first" }
+        case_sensitive: { type: boolean }
+        ignore_trailing_slash: { type: boolean }
+        only_if_not_found: { type: boolean, description: "Apply only when no page exists at the source URL" }
+        dry_run: { type: boolean, description: "Validate only, do not save" }
+
+  - name: test
+    title: Test a URL against the rules
+    description: >
+      Show what the redirect rules do with a URL, without making a request: the matching rule, the status and
+      location, the whole redirect chain, the final status (200, 404, 410) and whether a page exists at the URL.
+    method: POST
+    path: /redirects/test
+    permission: api.redirects.read
+    annotations:
+      readOnly: true
+      idempotent: true
+    input:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, description: "Absolute URL or path, e.g. /old-page or https://example.com/de/alt" }
+        method: { type: string, default: GET }
+        language: { type: string, description: "Language code when the URL carries no language prefix" }
+        phase: { type: string, enum: [early, not_found, any], default: any }
+
+  - name: top_404
+    title: Top 404 paths
+    description: >
+      Report of the most requested URLs that answered 404, busiest first, with hit counts, first and last seen,
+      main referers, whether a rule already covers the path and the best page suggestion for a new redirect.
+    method: GET
+    path: /redirects/404
+    permission: api.redirects.read
+    annotations:
+      readOnly: true
+    input:
+      type: object
+      properties:
+        days: { type: integer, enum: [7, 30, 90], default: 30 }
+        bots: { type: integer, enum: [0, 1], default: 0, description: "1 includes bot traffic" }
+        q: { type: string, description: "Only paths containing this text" }
+        sort: { type: string, enum: [hits, last, first, path], default: hits }
+        page: { type: integer, minimum: 1, default: 1 }
+        per_page: { type: integer, minimum: 1, maximum: 200, default: 25 }
+
+  - name: suggest
+    title: Suggest redirect targets for a path
+    description: >
+      Find existing pages that fit a missing URL, best first. Each suggestion has the target route, a score from
+      0 to 1 and the reason (same slug, other language, similar route, title match, taxonomy match, parent or home
+      fallback). Use it before creating a rule for a 404 path.
+    method: GET
+    path: /redirects/suggest
+    permission: api.redirects.read
+    annotations:
+      readOnly: true
+    input:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, description: "The missing URL path, e.g. /old/blog-post.html" }
+        language: { type: string, description: "Language code to prefer" }
+        limit: { type: integer, minimum: 1, maximum: 20, default: 5 }
+
+  - name: import
+    title: Import redirect rules
+    description: >
+      Import rules from the text of a file: CSV, JSON, YAML, Apache .htaccess, Nginx config, Netlify _redirects,
+      Grav site.yaml, WordPress Redirection exports or a crawler export of broken URLs (which creates suggestions
+      instead of rules). The format is detected from the content when not given. Rows are validated; duplicates are
+      skipped by default. With skip_invalid false, any invalid row rejects the whole import.
+    method: POST
+    path: /redirects/import/commit
+    permission: api.redirects.manage
+    input:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, description: "The file content as text" }
+        filename: { type: string, description: "File name, helps to detect the format" }
+        format: { type: string, enum: [csv, json, yaml, grav_site, htaccess, nginx, wordpress_json, wordpress_csv, crawler_csv, netlify] }
+        skip_duplicates: { type: boolean, default: true }
+        skip_invalid: { type: boolean, default: false }
+        options:
+          type: object
+          description: "Format options, e.g. default_group, default_status, delimiter, has_header, columns"
+          additionalProperties: true

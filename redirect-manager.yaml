@@ -12,6 +12,8 @@ redirects:
   query_ignore: ['utm_*', 'fbclid', 'gclid', 'msclkid']
   # Extra path prefixes that are never redirected. The API and admin routes are always excluded.
   excluded_paths: []
+  # Scheduler: switch off rules whose "expires at" has passed (they never match anyway)
+  disable_expired: false
 
 security:
   # Hosts allowed as external targets, e.g. ['example.org', '*.example.org']
@@ -45,6 +47,10 @@ suggestions:
   min_score: 0.5
   bulk_accept_score: 0.9
 
+# Public root URL of the site for runs without a request (scheduler, command line): live checks and report mail links.
+# Empty = system.custom_base_url, else http://localhost
+base_url: ''
+
 checker:
   enabled: true
   schedule: '30 3 * * 0'
@@ -66,3 +72,9 @@ notifications:
 
 stats:
   keep_days: 90
+  # Rules without a hit for this many days get the "unused" badge
+  unused_days: 180
+
+import:
+  # Largest import (file content, API body) in MB
+  max_mb: 10

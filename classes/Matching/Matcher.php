@@ -55,19 +55,26 @@ final class Matcher
     ) {
     }
 
-    public function match(RequestContext $ctx, MatchPhase $phase = MatchPhase::Early, bool $withTrace = false): ?MatchResult
+    /**
+     * @param list<TraceStep>|null $traceOut receives the evaluated candidates when $withTrace is set, also when nothing matched
+     */
+    public function match(RequestContext $ctx, MatchPhase $phase = MatchPhase::Early, bool $withTrace = false, ?array &$traceOut = null): ?MatchResult
     {
-        return RegexSafety::withLimits(function () use ($ctx, $phase, $withTrace): ?MatchResult {
+        return RegexSafety::withLimits(function () use ($ctx, $phase, $withTrace, &$traceOut): ?MatchResult {
             set_error_handler(static fn (int $no, string $message): bool => str_starts_with($message, 'preg_'), E_WARNING);
             try {
-                return $this->run($ctx, $phase, $withTrace);
+                return $this->run($ctx, $phase, $withTrace, $traceOut);
             } finally {
                 restore_error_handler();
             }
         }, $this->options->backtrackLimit, $this->options->recursionLimit);
     }
 
-    private function run(RequestContext $ctx, MatchPhase $phase, bool $withTrace): ?MatchResult
+    /**
+     * @param-out list<TraceStep> $traceOut
+     * @param list<TraceStep>|null $traceOut
+     */
+    private function run(RequestContext $ctx, MatchPhase $phase, bool $withTrace, ?array &$traceOut = null): ?MatchResult
     {
         $now = $this->clock->now();
         $current = $ctx;
@@ -103,6 +110,7 @@ final class Matcher
             }
         }
 
+        $traceOut = $trace;
         if ($hit === null) {
             return null;
         }

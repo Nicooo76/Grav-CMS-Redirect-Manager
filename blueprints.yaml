@@ -106,6 +106,16 @@ form:
               help: PLUGIN_REDIRECT_MANAGER.CONFIG.EXCLUDED_PATHS_HELP
               validate:
                 type: commalist
+            redirects.disable_expired:
+              type: toggle
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.DISABLE_EXPIRED
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.DISABLE_EXPIRED_HELP
+              default: 0
+              options:
+                1: PLUGIN_ADMIN.YES
+                0: PLUGIN_ADMIN.NO
+              validate:
+                type: bool
 
         security_tab:
           type: tab
@@ -287,6 +297,11 @@ form:
           type: tab
           title: PLUGIN_REDIRECT_MANAGER.CONFIG.TAB_CHECKS
           fields:
+            base_url:
+              type: text
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.BASE_URL
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.BASE_URL_HELP
+              placeholder: 'https://example.org'
             checker.enabled:
               type: toggle
               label: PLUGIN_REDIRECT_MANAGER.CONFIG.CHECKER_ENABLED
@@ -386,3 +401,21 @@ form:
                 type: int
                 min: 7
                 max: 730
+            stats.unused_days:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.STATS_UNUSED_DAYS
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.STATS_UNUSED_DAYS_HELP
+              default: 180
+              validate:
+                type: int
+                min: 1
+                max: 3650
+            import.max_mb:
+              type: number
+              label: PLUGIN_REDIRECT_MANAGER.CONFIG.IMPORT_MAX_MB
+              help: PLUGIN_REDIRECT_MANAGER.CONFIG.IMPORT_MAX_MB_HELP
+              default: 10
+              validate:
+                type: int
+                min: 1
+                max: 100

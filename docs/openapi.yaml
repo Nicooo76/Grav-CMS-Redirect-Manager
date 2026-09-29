@@ -1,0 +1,2614 @@
+openapi: 3.1.0
+info:
+  title: Redirect Manager API
+  version: 1.0.0
+  summary: REST API of the Redirect Manager plugin for Grav 2.
+  description: |
+    Manage redirect rules, test URLs, work through the 404 monitor, accept redirect suggestions, import and
+    export rule sets, run live target checks and decide on auto redirects for deleted pages.
+
+    All paths are relative to the API plugin prefix (`/api/v1`). Every operation needs one of the API plugin's
+    credentials (see the security schemes) or the admin session cookie, plus one of two permissions:
+    `api.redirects.read` for reads and `api.redirects.manage` for writes. Super admins pass both. The permission of
+    each operation is listed in its `x-permission` field.
+
+    Success responses use the API plugin envelope `{data, meta?, links?}`. Errors are RFC 7807
+    `application/problem+json`; validation errors are 422 with an `errors` list of field errors.
+
+    This file is checked against the routes registered in `redirect-manager.php` by `tests/Unit/OpenApiTest.php`.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: /api/v1
+    description: API plugin prefix; change it if the site uses another `api.route`.
+security:
+  - apiKey: []
+  - jwtHeader: []
+  - bearerAuth: []
+tags:
+  - name: Rules
+    description: Create, read, change, delete, reorder and analyse redirect rules.
+  - name: Tester
+    description: Ask what happens to a URL without making a real request.
+  - name: 404 monitor
+    description: Logged 404 requests grouped by path.
+  - name: Suggestions
+    description: Suggested redirect targets for 404 paths.
+  - name: Import and export
+    description: Import files from other tools, compare a sitemap, export rules, read Grav's own redirect settings.
+  - name: Checks and stats
+    description: Live target checks and dashboard numbers.
+  - name: Pages
+    description: Page search for the target picker.
+  - name: Auto redirects
+    description: Decisions for deleted pages and the sidebar badge.
+
+paths:
+  /redirects/rules:
+    get:
+      tags: [Rules]
+      operationId: listRules
+      summary: List rules
+      description: |
+        Rules with hit statistics, badges and analysis issues. Sorted by priority (highest first) unless `sort`
+        says otherwise. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      parameters:
+        - name: q
+          in: query
+          description: Search in source, target, note, group and tags (case-insensitive).
+          schema: {type: string}
+        - name: match_type
+          in: query
+          schema: {$ref: '#/components/schemas/MatchType'}
+        - name: status
+          in: query
+          description: HTTP status of the rule.
+          schema: {$ref: '#/components/schemas/RuleStatus'}
+        - name: state
+          in: query
+          schema: {$ref: '#/components/schemas/RuleState'}
+        - name: badge
+          in: query
+          description: Only rules that carry this badge. The `meta.counts` of the response ignore this filter.
+          schema: {$ref: '#/components/schemas/RuleBadge'}
+        - name: group
+          in: query
+          description: Exact group name.
+          schema: {type: string}
+        - name: tag
+          in: query
+          description: Exact tag.
+          schema: {type: string}
+        - name: origin
+          in: query
+          schema: {$ref: '#/components/schemas/RuleOrigin'}
+        - name: unused_days
+          in: query
+          description: Only rules without a hit for this many days.
+          schema: {type: integer, minimum: 1}
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [priority, source, target, status, hits, last_hit, created_at, updated_at]
+            default: priority
+        - name: dir
+          in: query
+          description: Default is `desc` for priority, hits, last_hit, created_at and updated_at, else `asc`.
+          schema: {type: string, enum: [asc, desc]}
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: per_page
+          in: query
+          description: Values above the maximum are cut to 500.
+          schema: {type: integer, minimum: 1, maximum: 500, default: 50}
+      responses:
+        '200':
+          description: One page of rules.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RulePage'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    post:
+      tags: [Rules]
+      operationId: createRule
+      summary: Create a rule
+      description: |
+        Validates and stores a rule. Loops, invalid regular expressions and unsafe targets are rejected with 422;
+        warnings (chain, conflict) come back in `data.issues`. With `dry_run=1` nothing is stored and the response
+        is `{rule, issues, preview}` with status 200. The status defaults to the site's redirect default, the
+        origin to `manual`. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      parameters:
+        - name: dry_run
+          in: query
+          description: Validate only. Accepts 1, true, yes or on.
+          schema: {type: boolean, default: false}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/RuleInput'
+                - type: object
+                  required: [source]
+            example:
+              source: /old-page
+              target: /new-page
+              status: 301
+      responses:
+        '201':
+          description: The stored rule, with stats, badges and the findings of its own validation.
+          headers:
+            ETag: {$ref: '#/components/headers/ETag'}
+            Location:
+              description: URL of the new rule.
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Rule'}}}
+        '200':
+          description: Dry run result (only with `dry_run`).
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/RuleDryRun'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/rules/restore:
+    post:
+      tags: [Rules]
+      operationId: restoreRules
+      summary: Restore deleted rules
+      description: |
+        Puts deleted rules back with their ids and timestamps (undo). A rule whose id exists again replaces it.
+        The rules are not validated again. At most 1000 rules. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rules]
+              properties:
+                rules:
+                  type: array
+                  minItems: 1
+                  maxItems: 1000
+                  description: Rules as returned by the delete or bulk delete response. Every rule needs an `id`.
+                  items:
+                    allOf:
+                      - $ref: '#/components/schemas/RuleInput'
+                      - type: object
+                        required: [id]
+                        properties:
+                          id: {type: string}
+                          created_at: {type: [string, 'null'], format: date-time}
+                          updated_at: {type: [string, 'null'], format: date-time}
+      responses:
+        '200':
+          description: The restored rules.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/RestoreResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/rules/bulk:
+    post:
+      tags: [Rules]
+      operationId: bulkRules
+      summary: Change many rules at once
+      description: |
+        Applies one action to up to 1000 rules. Rules that fail validation after the change, and unknown ids, are
+        listed in `skipped` and left untouched. `delete` returns the deleted rules so a client can offer undo.
+        Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BulkRequest'}
+            example: {action: set_group, ids: [r0192f3c1a2b4f1e2d3], value: Shop}
+      responses:
+        '200':
+          description: Changed (or deleted) rules and skipped ids.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/BulkResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/rules/reorder:
+    post:
+      tags: [Rules]
+      operationId: reorderRules
+      summary: Reorder rules
+      description: |
+        The listed rules take their own priority values back in the new order (highest value to the first id).
+        Rules that are not listed do not change. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 2
+                  maxItems: 1000
+                  description: Rule ids in the desired order, first = evaluated first.
+                  items: {type: string}
+      responses:
+        '200':
+          description: The rules whose priority changed.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/ReorderResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/rules/validate:
+    post:
+      tags: [Rules]
+      operationId: validateRule
+      summary: Validate a rule without saving
+      description: |
+        For the live editor. The body holds rule fields; with `id` the fields are applied on top of that stored
+        rule. Field errors that make the rule unusable are returned as issues, not as 422. When the body has a
+        `sample` URL the response also shows what the rule would do to it. Needs `api.redirects.read` because
+        nothing is stored.
+      x-permission: api.redirects.read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/RuleInput'
+                - type: object
+                  properties:
+                    id:
+                      type: string
+                      description: Stored rule to use as the base and to leave out of duplicate and conflict checks.
+                    sample:
+                      type: string
+                      description: A URL or path to run through the candidate rule.
+                    language:
+                      type: string
+                      description: Language of the sample request.
+      responses:
+        '200':
+          description: Findings and the optional preview.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [issues, preview]
+                    properties:
+                      issues:
+                        type: array
+                        items: {$ref: '#/components/schemas/ValidationIssue'}
+                      preview:
+                        oneOf:
+                          - $ref: '#/components/schemas/RulePreview'
+                          - type: 'null'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /redirects/rules/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RuleId'
+    get:
+      tags: [Rules]
+      operationId: getRule
+      summary: Get one rule
+      description: One rule with stats, badges and issues. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      responses:
+        '200':
+          description: The rule.
+          headers:
+            ETag: {$ref: '#/components/headers/ETag'}
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Rule'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Rules]
+      operationId: updateRule
+      summary: Update a rule
+      description: |
+        Partial update: only the fields in the body change. Same validation as create. Send the ETag of the rule
+        in `If-Match` to refuse the change when someone else edited it meanwhile (409). Needs
+        `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RuleInput'}
+            example: {enabled: false}
+      responses:
+        '200':
+          description: The updated rule.
+          headers:
+            ETag: {$ref: '#/components/headers/ETag'}
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Rule'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    delete:
+      tags: [Rules]
+      operationId: deleteRule
+      summary: Delete a rule
+      description: |
+        Deletes the rule and returns it, so a client can offer undo through `restoreRules`. `If-Match` works as
+        for update. There is no request body. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: The deleted rule (rule fields only, no stats).
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Rule'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+
+  /redirects/rules/{id}/shorten-chain:
+    parameters:
+      - $ref: '#/components/parameters/RuleId'
+    post:
+      tags: [Rules]
+      operationId: shortenRuleChain
+      summary: Point a rule at the end of its chain
+      description: |
+        One-click fix for a redirect chain: sets the target (and status) of the rule to the end of the chain it
+        starts. 422 with code `no_chain` when the rule is not the start of a chain that can be shortened. There is
+        no request body. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      responses:
+        '200':
+          description: The updated rule.
+          headers:
+            ETag: {$ref: '#/components/headers/ETag'}
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Rule'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/analysis:
+    get:
+      tags: [Rules]
+      operationId: getAnalysis
+      summary: Analyse all rules
+      description: Chains, loops, conflicts, expired and unused rules over the whole rule set. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      responses:
+        '200':
+          description: The analysis.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Analysis'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /redirects/groups:
+    get:
+      tags: [Rules]
+      operationId: listGroups
+      summary: List groups and tags
+      description: Every group and tag in use with the number of rules. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      responses:
+        '200':
+          description: Groups and tags.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/GroupList'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /redirects/test:
+    post:
+      tags: [Tester]
+      operationId: testUrl
+      summary: Test what happens to a URL
+      description: |
+        Runs the URL through the same matching as a live request and follows the redirect chain like a browser.
+        No real request is made and external targets are not fetched. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TestRequest'}
+            example: {url: /old-page, language: de}
+      responses:
+        '200':
+          description: The outcome, the chain and the evaluation trace.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/TestResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/404:
+    get:
+      tags: [404 monitor]
+      operationId: listNotFound
+      summary: List logged 404 paths
+      description: |
+        404 requests grouped by path. Paths marked as resolved stay hidden until they get a new hit, unless
+        `include_resolved` is set. Times are UTC. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      parameters:
+        - name: days
+          in: query
+          description: Range in days, counting today. Values outside 1..366 are clamped. Ignored when `from` is set.
+          schema: {type: integer, minimum: 1, maximum: 366, default: 30}
+        - name: from
+          in: query
+          description: Start of the range, an ISO date (`2026-09-01`) or date and time.
+          schema: {type: string}
+        - name: to
+          in: query
+          description: End of the range. A date without time means the end of that day.
+          schema: {type: string}
+        - name: bots
+          in: query
+          description: Include requests from bots. Accepts 1, true, yes or on.
+          schema: {type: boolean, default: false}
+        - name: class
+          in: query
+          description: Only requests of this user agent class. `bot` implies `bots`.
+          schema: {$ref: '#/components/schemas/UserAgentClass'}
+        - name: q
+          in: query
+          description: Search in the path.
+          schema: {type: string}
+        - name: language
+          in: query
+          schema: {type: string}
+        - name: host
+          in: query
+          schema: {type: string}
+        - name: sort
+          in: query
+          schema: {type: string, enum: [hits, last, first, path], default: hits}
+        - name: dir
+          in: query
+          description: Default is `asc` for `path`, else `desc`.
+          schema: {type: string, enum: [asc, desc]}
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: per_page
+          in: query
+          description: Values above the maximum are cut to 500.
+          schema: {type: integer, minimum: 1, maximum: 500, default: 50}
+        - name: include_resolved
+          in: query
+          description: 'Also list paths marked as resolved (they carry `resolved: true`).'
+          schema: {type: boolean, default: false}
+      responses:
+        '200':
+          description: One page of grouped 404 paths.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotFoundPage'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    delete:
+      tags: [404 monitor]
+      operationId: deleteNotFound
+      summary: Delete logged 404 entries
+      description: |
+        Deletes the log entries of one path (`path` in the query) or of all paths (`all: true` in the body or the
+        query). 404 when the path has no entries. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      parameters:
+        - name: path
+          in: query
+          description: The path whose entries are deleted.
+          schema: {type: string}
+        - name: all
+          in: query
+          description: Delete every entry. Also accepted as `all` in the body.
+          schema: {type: boolean, default: false}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                all:
+                  type: boolean
+                  default: false
+                  description: Delete the entries of every path.
+            example: {all: true}
+      responses:
+        '200':
+          description: Number of deleted entries.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/DeletedCount'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/404/trend:
+    get:
+      tags: [404 monitor]
+      operationId: getNotFoundTrend
+      summary: Daily 404 counts
+      description: Hits per UTC day, oldest first. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      parameters:
+        - name: days
+          in: query
+          description: Range in days, counting today. Values outside 1..366 are clamped.
+          schema: {type: integer, minimum: 1, maximum: 366, default: 30}
+        - name: bots
+          in: query
+          description: Include requests from bots.
+          schema: {type: boolean, default: false}
+      responses:
+        '200':
+          description: Hits by day.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/NotFoundTrend'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/404/entries:
+    get:
+      tags: [404 monitor]
+      operationId: listNotFoundEntries
+      summary: Raw entries of one path
+      description: The latest 100 log entries of exactly this path in the last 90 days, newest first. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Log entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    maxItems: 100
+                    items: {$ref: '#/components/schemas/NotFoundEntry'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/404/ignore:
+    post:
+      tags: [404 monitor]
+      operationId: ignoreNotFoundPattern
+      summary: Add an ignore pattern
+      description: |
+        Appends a glob pattern to `log.ignore_patterns` in the plugin configuration. With `purge` the logged
+        paths it matches are deleted too. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pattern]
+              properties:
+                pattern:
+                  type: string
+                  maxLength: 300
+                  description: Glob such as `/wp-*`. A pattern that would match every path is refused.
+                purge:
+                  type: boolean
+                  default: false
+                  description: Also delete the logged entries the pattern matches.
+            example: {pattern: /wp-*, purge: true}
+      responses:
+        '200':
+          description: The pattern, the full ignore list and the number of purged entries.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/IgnoreResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+
+  /redirects/404/resolve:
+    post:
+      tags: [404 monitor]
+      operationId: resolveNotFound
+      summary: Mark 404 paths as resolved
+      description: |
+        Hides paths from the monitor until they get a new hit (`resolved: true`), or brings them back
+        (`resolved: false`). At most 500 paths. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paths]
+              properties:
+                paths:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items: {type: string}
+                resolved:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Number of handled paths.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [resolved]
+                    properties:
+                      resolved: {type: integer, minimum: 0}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/suggest:
+    get:
+      tags: [Suggestions]
+      operationId: suggestTargets
+      summary: Suggest targets for a path
+      description: Live suggestions from the page index for one path, best first. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: {type: string}
+        - name: language
+          in: query
+          schema: {type: string}
+        - name: limit
+          in: query
+          description: Values outside 1..20 are clamped.
+          schema: {type: integer, minimum: 1, maximum: 20, default: 5}
+      responses:
+        '200':
+          description: Suggestions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/Suggestion'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/suggestions:
+    get:
+      tags: [Suggestions]
+      operationId: listSuggestions
+      summary: List stored suggestions
+      description: Stored suggestions, best score first. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      parameters:
+        - name: status
+          in: query
+          schema: {type: string, enum: [open, accepted, rejected, all], default: open}
+        - name: min_score
+          in: query
+          schema: {type: number, minimum: 0, maximum: 1}
+        - name: source
+          in: query
+          description: Where the suggestion came from.
+          schema: {$ref: '#/components/schemas/SuggestionSource'}
+      responses:
+        '200':
+          description: Stored suggestions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/StoredSuggestion'}
+                  meta:
+                    type: object
+                    required: [total]
+                    properties:
+                      total: {type: integer, minimum: 0}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/suggestions/generate:
+    post:
+      tags: [Suggestions]
+      operationId: generateSuggestions
+      summary: Generate suggestions for open 404 paths
+      description: |
+        Looks at the 404 paths of the last 30 days that no rule covers (bots and resolved paths are left out) and
+        stores the best suggestion per path when its score reaches `suggestions.min_score`. There is no request
+        body. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      responses:
+        '200':
+          description: Counts of the run.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/GenerateResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /redirects/suggestions/bulk-accept:
+    post:
+      tags: [Suggestions]
+      operationId: bulkAcceptSuggestions
+      summary: Accept many suggestions
+      description: |
+        Accepts all open suggestions with a score of at least `min_score` (default: `suggestions.bulk_accept_score`,
+        0.9). With `dry_run` nothing changes and the matching rows are returned. Suggestions whose rule fails
+        validation are listed in `skipped`. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                min_score:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                ids:
+                  type: array
+                  description: Limit the run to these suggestion ids.
+                  items: {type: string}
+                dry_run:
+                  type: boolean
+                  default: false
+            example: {min_score: 0.9, dry_run: true}
+      responses:
+        '200':
+          description: Preview rows (dry run) or the accepted rows with the created rules.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/BulkAcceptResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/suggestions/{id}/accept:
+    parameters:
+      - $ref: '#/components/parameters/SuggestionId'
+    post:
+      tags: [Suggestions]
+      operationId: acceptSuggestion
+      summary: Accept a suggestion
+      description: |
+        Creates a rule with origin `suggestion` (validated like any rule) and marks the suggestion accepted. A
+        rejected rule leaves the suggestion open. 409 when the suggestion was already decided. Needs
+        `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target:
+                  type: string
+                  description: Use this target instead of the suggested one.
+                status:
+                  $ref: '#/components/schemas/RuleStatus'
+            example: {target: /new-page, status: 301}
+      responses:
+        '201':
+          description: The new rule and the accepted suggestion.
+          headers:
+            Location:
+              description: URL of the new rule.
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/AcceptResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/suggestions/{id}/reject:
+    parameters:
+      - $ref: '#/components/parameters/SuggestionId'
+    post:
+      tags: [Suggestions]
+      operationId: rejectSuggestion
+      summary: Reject a suggestion
+      description: |
+        Marks the suggestion rejected; it will not be suggested again for that path. 409 when it was accepted
+        before. There is no request body. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      responses:
+        '200':
+          description: The rejected suggestion.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/StoredSuggestion'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+
+  /redirects/import/formats:
+    get:
+      tags: [Import and export]
+      operationId: listImportFormats
+      summary: List import and export formats
+      description: Supported formats with their import and export flags. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      responses:
+        '200':
+          description: Formats.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/ImportFormat'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /redirects/import/preview:
+    post:
+      tags: [Import and export]
+      operationId: previewImport
+      summary: Preview an import
+      description: |
+        Parses the file content and validates every row like a hand-made rule. Nothing is stored. The content is
+        sent as text in the JSON body (or base64 with `encoding: base64`) and limited by `import.max_mb`
+        (default 10 MB, decoded). A file that cannot be parsed is reported in `errors`, not as HTTP error. Needs
+        `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ImportRequest'}
+      responses:
+        '200':
+          description: The preview.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/ImportPreview'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/import/commit:
+    post:
+      tags: [Import and export]
+      operationId: commitImport
+      summary: Commit an import
+      description: |
+        Stores the valid rows. Unless `skip_invalid` is set, one invalid row in scope stops the whole import
+        (422, code `import_invalid`, nothing stored). Crawler exports create 404 candidates and suggestions
+        instead of rules. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ImportCommitRequest'}
+      responses:
+        '200':
+          description: What was created.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/ImportCommitResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/import/sitemap:
+    post:
+      tags: [Import and export]
+      operationId: compareSitemap
+      summary: Compare an old sitemap
+      description: |
+        Compares the paths of an old sitemap with the current pages and rules and creates suggestions for the
+        missing paths. A sitemap index is refused (422, code `sitemap_index`). Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  description: Sitemap XML as text, or base64 when `encoding` is `base64` (gzip works, too).
+                encoding:
+                  type: string
+                  enum: [base64]
+                  description: Omit for plain text.
+      responses:
+        '200':
+          description: The comparison.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/SitemapDiff'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/export:
+    get:
+      tags: [Import and export]
+      operationId: exportRules
+      summary: Export rules
+      description: |
+        Renders the rules in one of the export formats. The file comes back as text inside the JSON response.
+        Rules a format cannot express are listed in `skipped` (left out) or `lossy` (exported with a loss).
+        Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      parameters:
+        - name: format
+          in: query
+          description: Export format. Crawler exports cannot be created.
+          schema: {$ref: '#/components/schemas/ImportFormatId', default: csv}
+        - name: only_enabled
+          in: query
+          schema: {type: boolean, default: false}
+        - name: group
+          in: query
+          description: Only rules of this group.
+          schema: {type: string}
+        - name: status
+          in: query
+          description: Only rules with these status codes, comma separated (`301,302`).
+          schema: {type: string}
+        - name: host
+          in: query
+          description: Host to put in front of relative paths where a format needs absolute URLs.
+          schema: {type: string}
+      responses:
+        '200':
+          description: The export.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/ExportResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/site-config:
+    get:
+      tags: [Import and export]
+      operationId: getSiteConfig
+      summary: Read Grav's own redirect settings
+      description: |
+        `site.redirects`, `site.routes` and the `system.pages.redirect_*` settings. Read-only. Needs
+        `api.redirects.read`.
+      x-permission: api.redirects.read
+      responses:
+        '200':
+          description: The settings.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/SiteConfig'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /redirects/site-config/import:
+    post:
+      tags: [Import and export]
+      operationId: importSiteConfig
+      summary: Import Grav's redirects as rules
+      description: |
+        Turns `site.redirects` and `site.routes` into plugin rules (group `site.yaml`). `site.yaml` itself is not
+        changed. 422 with code `nothing_to_import` when there is nothing to import. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                redirects: {type: boolean, default: true, description: 'Import `site.redirects`.'}
+
+                routes: {type: boolean, default: true, description: 'Import `site.routes`.'}
+
+                skip_duplicates: {type: boolean, default: true}
+                skip_invalid: {type: boolean, default: true}
+      responses:
+        '200':
+          description: What was created.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/ImportCommitResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/stats:
+    get:
+      tags: [Checks and stats]
+      operationId: getStats
+      summary: Dashboard numbers
+      description: Counts for the dashboard widget. Days are UTC days; 404 numbers exclude bots. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      responses:
+        '200':
+          description: The numbers.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Stats'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /redirects/checks:
+    get:
+      tags: [Checks and stats]
+      operationId: listChecks
+      summary: Last live-check results
+      description: Stored results for rules that still exist, dead targets first. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      responses:
+        '200':
+          description: The results and the time of the last run.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/CheckList'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /redirects/checks/run:
+    post:
+      tags: [Checks and stats]
+      operationId: runChecks
+      summary: Run the live check now
+      description: |
+        Requests the targets of enabled redirect rules and stores the results. Rate limited: a second run within
+        `checker.manual_interval` seconds (default 300) gets 429 with `Retry-After`. 503 when no HTTP client is
+        installed. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  description: Check only these rules. Unknown ids give 404.
+                  items: {type: string}
+      responses:
+        '200':
+          description: The results of this run.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/CheckRun'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+
+  /redirects/pages:
+    get:
+      tags: [Pages]
+      operationId: searchPages
+      summary: Search pages
+      description: Page search for the target picker. Routes match first, then titles. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      parameters:
+        - name: q
+          in: query
+          description: Search text; empty returns pages by route.
+          schema: {type: string}
+        - name: language
+          in: query
+          schema: {type: string}
+        - name: limit
+          in: query
+          description: Values outside 1..100 are clamped.
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      responses:
+        '200':
+          description: Matching pages.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/PageHit'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /redirects/pending:
+    get:
+      tags: [Auto redirects]
+      operationId: listPendingDeletes
+      summary: List deleted pages waiting for a decision
+      description: |
+        Pages that were deleted while `auto_redirect.on_delete` is `ask`. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      responses:
+        '200':
+          description: Pending decisions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/PendingDelete'}
+                  meta:
+                    type: object
+                    required: [total]
+                    properties:
+                      total: {type: integer, minimum: 0}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /redirects/pending/{id}/resolve:
+    parameters:
+      - $ref: '#/components/parameters/PendingId'
+    post:
+      tags: [Auto redirects]
+      operationId: resolvePendingDelete
+      summary: Decide what happens to a deleted page
+      description: |
+        `gone` answers 410, `parent` redirects to the nearest parent page that still exists, `redirect` redirects
+        to `target`, `dismiss` does nothing. The rules created by the decision are validated like hand-made rules;
+        a failing rule gives 422 and the decision stays pending. Needs `api.redirects.manage`.
+      x-permission: api.redirects.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [gone, parent, redirect, dismiss]
+                target:
+                  type: string
+                  description: Required for `redirect`. A route starting with `/` or an http(s) URL.
+            example: {action: redirect, target: /new-page}
+      responses:
+        '200':
+          description: What the decision created, changed and removed.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/PendingResolveResult'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /redirects/badge:
+    get:
+      tags: [Auto redirects]
+      operationId: getBadge
+      summary: Sidebar badge count
+      description: |
+        Number of auto rules the editor has not seen yet plus the pending decisions. Needs `api.redirects.read`.
+      x-permission: api.redirects.read
+      responses:
+        '200':
+          description: The counts.
+          content:
+            application/json:
+              schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Badge'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /redirects/badge/seen:
+    post:
+      tags: [Auto redirects]
+      operationId: markBadgeSeen
+      summary: Mark auto rules as seen
+      description: |
+        Clears the unseen part of the badge; pending decisions stay counted. There is no request body. Needs
+        `api.redirects.read`, because it changes only the viewer's badge state and no rule.
+      x-permission: api.redirects.read
+      responses:
+        '200':
+          description: The badge count after the change.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [count]
+                    properties:
+                      count: {type: integer, minimum: 0}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key created in the admin.
+    jwtHeader:
+      type: apiKey
+      in: header
+      name: X-API-Token
+      description: JWT issued by `POST /api/v1/auth/token`, sent in a custom header.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT issued by `POST /api/v1/auth/token`, sent as `Authorization`. The admin UI uses its session cookie instead.
+
+  parameters:
+    RuleId:
+      name: id
+      in: path
+      required: true
+      description: Rule id.
+      schema: {type: string, examples: [r0192f3c1a2b4f1e2d3]}
+    SuggestionId:
+      name: id
+      in: path
+      required: true
+      description: Suggestion id.
+      schema: {type: string}
+    PendingId:
+      name: id
+      in: path
+      required: true
+      description: Id of the pending decision.
+      schema: {type: string}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: ETag from an earlier read. The change is refused with 409 when the rule changed since.
+      schema: {type: string}
+
+  headers:
+    ETag:
+      description: Entity tag of the rule (quoted). Send it back in `If-Match`.
+      schema: {type: string}
+    RetryAfter:
+      description: Seconds until the request may be repeated.
+      schema: {type: integer, minimum: 1}
+
+  responses:
+    Unauthorized:
+      description: No valid credentials.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    Forbidden:
+      description: The user lacks the permission named in the operation's `x-permission`.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    NotFound:
+      description: The rule, suggestion, pending decision or 404 path does not exist.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    Conflict:
+      description: |
+        The record changed since it was read (`If-Match` does not match, or the rules file was changed at the
+        same time), or the suggestion was already decided.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    PayloadTooLarge:
+      description: The import is larger than `import.max_mb`.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    ValidationError:
+      description: The request is invalid. `errors` lists every finding with the field and a stable code.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+          example:
+            status: 422
+            title: Unprocessable Entity
+            detail: The rule is invalid.
+            errors:
+              - field: source
+                code: source_empty
+                message: The source is empty.
+                severity: error
+              - field: target
+                code: loop
+                message: The redirect leads back to its own source.
+                severity: error
+                params: {chain: [/a, /b, /a]}
+    TooManyRequests:
+      description: The live check ran too recently.
+      headers:
+        Retry-After: {$ref: '#/components/headers/RetryAfter'}
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    ServiceUnavailable:
+      description: The plugin configuration cannot be written, the rules file is locked, or no HTTP client is installed.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+
+  schemas:
+    # ------------------------------------------------------------------ errors and envelopes
+    Severity:
+      type: string
+      enum: [error, warning, info]
+    FieldError:
+      type: object
+      description: One entry of `errors` in a 422 response.
+      required: [field, code, message, severity]
+      properties:
+        field:
+          type: string
+          description: Name of the field, `rows.<line>` for import rows or `rules.<index>.<field>` for restored rules. Empty when no field applies.
+        code: {type: string, description: 'Stable machine-readable identifier.'}
+
+        message: {type: string, description: 'English fallback text.'}
+
+        severity: {$ref: '#/components/schemas/Severity'}
+        params:
+          type: object
+          description: Details for translating the message.
+          additionalProperties: true
+        source:
+          type: string
+          description: Source path of the rule that failed (only when resolving a pending decision).
+    Problem:
+      type: object
+      description: RFC 7807 problem details.
+      required: [status, title, detail]
+      properties:
+        status: {type: integer, examples: [422]}
+        title: {type: string}
+        detail: {type: string}
+        code: {type: string, description: 'Optional error code of the API plugin.'}
+
+        errors:
+          type: array
+          description: Only on 422.
+          items: {$ref: '#/components/schemas/FieldError'}
+    Pagination:
+      type: object
+      description: The API plugin's `meta.pagination`.
+      required: [page, per_page, total, total_pages]
+      properties:
+        page: {type: integer, minimum: 1}
+        per_page: {type: integer, minimum: 0}
+        total: {type: integer, minimum: 0}
+        total_pages: {type: integer, minimum: 0}
+        located_at_index: {type: integer}
+    PaginationLinks:
+      type: object
+      required: [self]
+      properties:
+        self: {type: string}
+        first: {type: string}
+        prev: {type: string}
+        next: {type: string}
+        last: {type: string}
+    DayCounts:
+      type: object
+      description: Counts by UTC day, keys are `YYYY-MM-DD`.
+      additionalProperties: {type: integer, minimum: 0}
+    DeletedCount:
+      type: object
+      required: [deleted]
+      properties:
+        deleted: {type: integer, minimum: 0}
+
+    # ------------------------------------------------------------------ rules
+    MatchType:
+      type: string
+      enum: [exact, wildcard, regex]
+    RuleStatus:
+      type: integer
+      description: |
+        301, 302, 307 and 308 redirect. 410 and 451 answer without a target. 200 serves the target page under the
+        old URL (pass-through).
+      enum: [200, 301, 302, 307, 308, 410, 451]
+    TargetType:
+      type: string
+      description: '`route` is a Grav route, `page` a route picked from the page index, `url` an absolute URL.'
+      enum: [route, url, page]
+    QueryMode:
+      type: string
+      description: |
+        `ignore` matches regardless of the query string, `exact` only without a query (apart from `query_ignore`),
+        `pass` matches and passes the query on, `params` matches only when the parameters in `query_params` are present.
+      enum: [ignore, exact, pass, params]
+    RuleOrigin:
+      type: string
+      enum: [manual, import, auto, suggestion]
+    RuleState:
+      type: string
+      enum: [active, disabled, expired, scheduled]
+    RuleBadge:
+      type: string
+      enum: [active, disabled, expired, scheduled, chain, loop, conflict, dead_target, unused]
+    Condition:
+      type: object
+      description: One request condition. The rule matches only when every condition holds.
+      required: [kind, name, operator]
+      properties:
+        kind: {type: string, enum: [header, cookie]}
+        name: {type: string}
+        operator: {type: string, enum: [exists, equals, contains, starts_with, regex]}
+        value: {type: string, default: ''}
+        negate: {type: boolean, default: false}
+    Conditions:
+      type: object
+      properties:
+        hosts:
+          type: array
+          description: Host names the rule applies to; empty = all.
+          items: {type: string}
+        languages:
+          type: array
+          description: Languages the rule applies to; empty = all.
+          items: {type: string}
+        schemes:
+          type: array
+          items: {type: string, enum: [http, https]}
+        rules:
+          type: array
+          items: {$ref: '#/components/schemas/Condition'}
+    RuleStats:
+      type: object
+      required: [total, last_hit, daily]
+      properties:
+        total: {type: integer, minimum: 0}
+        last_hit: {type: [string, 'null'], format: date-time}
+        daily: {$ref: '#/components/schemas/DayCounts'}
+    ValidationIssue:
+      type: object
+      description: A finding about a rule, from validation or from the analysis.
+      required: [code, severity, field, message, params]
+      properties:
+        code:
+          type: string
+          description: Stable identifier such as `source_empty`, `regex_invalid`, `loop`, `chain`, `conflict`, `duplicate`.
+        severity: {$ref: '#/components/schemas/Severity'}
+        field: {type: string, description: 'The rule field the finding belongs to, empty if none.'}
+
+        message: {type: string, description: 'English fallback text.'}
+
+        params:
+          type: object
+          additionalProperties: true
+    RuleInput:
+      type: object
+      description: |
+        The writable fields of a rule. Unknown keys and the read-only fields (`stats`, `badges`, `issues`, and
+        `id` and the timestamps except when restoring) are ignored. Send only the fields you want to set on
+        update. On create the missing fields get the defaults shown here.
+      properties:
+        source:
+          type: string
+          description: Path to match, for example `/old-page`. Wildcard rules use `*`, regex rules a regular expression.
+        target:
+          type: string
+          description: Where to send the visitor. Wildcard targets may use `$1`, regex targets capture groups. Empty for 410 and 451.
+        match_type: {$ref: '#/components/schemas/MatchType'}
+        status:
+          allOf:
+            - $ref: '#/components/schemas/RuleStatus'
+          description: Defaults to the site's redirect default (usually 301).
+        enabled: {type: boolean, default: true}
+        priority:
+          type: integer
+          default: 0
+          description: Higher numbers are evaluated first.
+        target_type: {$ref: '#/components/schemas/TargetType'}
+        case_sensitive: {type: boolean, default: false}
+        ignore_trailing_slash: {type: boolean, default: true}
+        query_mode: {$ref: '#/components/schemas/QueryMode'}
+        query_params:
+          type: object
+          description: Required parameters for `query_mode` `params`. A null value means any value.
+          additionalProperties: {type: [string, 'null']}
+        query_ignore:
+          type: array
+          description: Parameter name patterns ignored for `query_mode` `exact` (`utm_*`). A comma separated string works too.
+          items: {type: string}
+        continue:
+          type: boolean
+          default: false
+          description: Keep matching further rules after this one.
+        only_if_not_found:
+          type: boolean
+          default: false
+          description: Apply only when no page exists for the source.
+        active_from:
+          type: [string, 'null']
+          format: date-time
+        expires_at:
+          type: [string, 'null']
+          format: date-time
+        note: {type: string, default: ''}
+        group: {type: string, default: ''}
+        tags:
+          type: array
+          items: {type: string}
+        origin:
+          allOf:
+            - $ref: '#/components/schemas/RuleOrigin'
+          description: Defaults to `manual`.
+        conditions: {$ref: '#/components/schemas/Conditions'}
+    Rule:
+      type: object
+      description: |
+        A redirect rule. `stats`, `badges` and `issues` are read-only and only present in responses that load
+        them (list, get, create, update, shorten chain); delete, restore, bulk and reorder return the rule fields only.
+      required:
+        - id
+        - source
+        - target
+        - match_type
+        - status
+        - enabled
+        - priority
+        - target_type
+        - case_sensitive
+        - ignore_trailing_slash
+        - query_mode
+        - query_params
+        - query_ignore
+        - continue
+        - only_if_not_found
+        - active_from
+        - expires_at
+        - note
+        - group
+        - tags
+        - origin
+        - conditions
+        - created_at
+        - updated_at
+      properties:
+        id: {type: string, readOnly: true}
+        source: {type: string}
+        target: {type: string}
+        match_type: {$ref: '#/components/schemas/MatchType'}
+        status: {$ref: '#/components/schemas/RuleStatus'}
+        enabled: {type: boolean}
+        priority: {type: integer}
+        target_type: {$ref: '#/components/schemas/TargetType'}
+        case_sensitive: {type: boolean}
+        ignore_trailing_slash: {type: boolean}
+        query_mode: {$ref: '#/components/schemas/QueryMode'}
+        query_params:
+          type: object
+          additionalProperties: {type: [string, 'null']}
+        query_ignore:
+          type: array
+          items: {type: string}
+        continue: {type: boolean}
+        only_if_not_found: {type: boolean}
+        active_from: {type: [string, 'null'], format: date-time}
+        expires_at: {type: [string, 'null'], format: date-time}
+        note: {type: string}
+        group: {type: string}
+        tags:
+          type: array
+          items: {type: string}
+        origin: {$ref: '#/components/schemas/RuleOrigin'}
+        conditions: {$ref: '#/components/schemas/Conditions'}
+        created_at: {type: [string, 'null'], format: date-time, readOnly: true}
+        updated_at: {type: [string, 'null'], format: date-time, readOnly: true}
+        stats:
+          allOf:
+            - $ref: '#/components/schemas/RuleStats'
+          readOnly: true
+        badges:
+          type: array
+          readOnly: true
+          items: {$ref: '#/components/schemas/RuleBadge'}
+        issues:
+          type: array
+          readOnly: true
+          items: {$ref: '#/components/schemas/ValidationIssue'}
+      examples:
+        - id: r0192f3c1a2b4f1e2d3
+          source: /old-page
+          target: /new-page
+          match_type: exact
+          status: 301
+          enabled: true
+          priority: 0
+          target_type: route
+          case_sensitive: false
+          ignore_trailing_slash: true
+          query_mode: ignore
+          query_params: {}
+          query_ignore: []
+          continue: false
+          only_if_not_found: false
+          active_from: null
+          expires_at: null
+          note: ''
+          group: ''
+          tags: []
+          origin: manual
+          conditions: {hosts: [], languages: [], schemes: [], rules: []}
+          created_at: '2026-09-29T12:00:00+00:00'
+          updated_at: '2026-09-29T12:00:00+00:00'
+          stats: {total: 12, last_hit: '2026-09-29T11:59:00+00:00', daily: {'2026-09-29': 3}}
+          badges: [active, chain]
+          issues:
+            - code: chain
+              severity: warning
+              field: target
+              message: The target is redirected again.
+              params: {chain: [/a, /b, /c], shortcut: /c}
+    RulePage:
+      type: object
+      description: List envelope of `listRules`.
+      required: [data, meta, links]
+      properties:
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/Rule'}
+        meta:
+          type: object
+          required: [pagination, total, page, per_page, groups, counts]
+          properties:
+            pagination: {$ref: '#/components/schemas/Pagination'}
+            total: {type: integer, minimum: 0, description: 'Same as `pagination.total`.'}
+
+            page: {type: integer, minimum: 1}
+            per_page: {type: integer, minimum: 0}
+            groups:
+              type: array
+              description: Names of all groups in use, natural order.
+              items: {type: string}
+            counts:
+              type: object
+              description: Number of rules per badge among the rules that match the other filters.
+              propertyNames: {$ref: '#/components/schemas/RuleBadge'}
+              additionalProperties: {type: integer, minimum: 0}
+        links: {$ref: '#/components/schemas/PaginationLinks'}
+    RuleDryRun:
+      type: object
+      description: Result of `createRule` with `dry_run`.
+      required: [rule, issues, preview]
+      properties:
+        rule:
+          allOf:
+            - $ref: '#/components/schemas/Rule'
+          description: The candidate rule with defaults filled in (rule fields only).
+        issues:
+          type: array
+          items: {$ref: '#/components/schemas/ValidationIssue'}
+        preview:
+          oneOf:
+            - $ref: '#/components/schemas/RulePreview'
+            - type: 'null'
+    RulePreview:
+      type: object
+      required: [sample, result]
+      properties:
+        sample: {type: string}
+        result:
+          oneOf:
+            - $ref: '#/components/schemas/PreviewResult'
+            - type: 'null'
+    PreviewResult:
+      type: object
+      description: What the candidate rule does to the sample URL.
+      required: [matched, status, location, captures, rule_id, rules, reason, trace]
+      properties:
+        matched: {type: boolean, description: 'True when the candidate itself is the rule that decides.'}
+
+        status:
+          oneOf:
+            - $ref: '#/components/schemas/RuleStatus'
+            - type: 'null'
+        location: {type: string}
+        captures:
+          type: object
+          additionalProperties: {type: string}
+        rule_id: {type: [string, 'null']}
+        rules:
+          type: array
+          items: {type: string}
+        reason:
+          type: string
+          enum: [matched, other_rule]
+        trace:
+          type: array
+          items: {$ref: '#/components/schemas/TraceStep'}
+    BulkRequest:
+      type: object
+      required: [action, ids]
+      properties:
+        action:
+          type: string
+          enum: [enable, disable, delete, set_status, set_group, add_tag, remove_tag]
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items: {type: string}
+        value:
+          type: [string, integer]
+          description: Status code for `set_status`, group name for `set_group`, tag for `add_tag` and `remove_tag`. Not used by the other actions.
+    BulkResult:
+      type: object
+      required: [affected, rules, skipped]
+      properties:
+        affected: {type: integer, minimum: 0}
+        rules:
+          type: array
+          description: The changed rules, or the deleted rules for `delete` (rule fields only).
+          items: {$ref: '#/components/schemas/Rule'}
+        skipped:
+          type: array
+          items:
+            type: object
+            required: [id, reason, errors]
+            properties:
+              id: {type: string}
+              reason:
+                type: string
+                enum: [invalid, not_found]
+              errors:
+                type: array
+                items: {$ref: '#/components/schemas/FieldError'}
+    RestoreResult:
+      type: object
+      required: [restored, rules]
+      properties:
+        restored: {type: integer, minimum: 0}
+        rules:
+          type: array
+          items: {$ref: '#/components/schemas/Rule'}
+    ReorderResult:
+      type: object
+      required: [affected, rules]
+      properties:
+        affected: {type: integer, minimum: 0}
+        rules:
+          type: array
+          items: {$ref: '#/components/schemas/Rule'}
+    Chain:
+      type: object
+      description: A redirect that passes through two or more hops.
+      required: [rule_ids, paths, shortcut, shortcut_status]
+      properties:
+        rule_ids:
+          type: array
+          items: {type: string}
+        paths:
+          type: array
+          items: {type: string}
+        shortcut: {type: [string, 'null'], description: 'The final path a shortened rule would point at.'}
+
+        shortcut_status: {type: [integer, 'null']}
+        language: {type: string}
+    Loop:
+      type: object
+      required: [rule_ids, paths]
+      properties:
+        rule_ids:
+          type: array
+          items: {type: string}
+        paths:
+          type: array
+          items: {type: string}
+    Analysis:
+      type: object
+      required: [chains, loops, conflicts, expired, unused]
+      properties:
+        chains:
+          type: array
+          items: {$ref: '#/components/schemas/Chain'}
+        loops:
+          type: array
+          items: {$ref: '#/components/schemas/Loop'}
+        conflicts:
+          type: array
+          description: Groups of rule ids that match the same request with the same priority.
+          items:
+            type: array
+            items: {type: string}
+        expired:
+          type: array
+          items: {type: string}
+        unused:
+          type: array
+          description: Ids of rules without a hit for the configured period (180 days by default).
+          items: {type: string}
+    NameCount:
+      type: object
+      required: [name, count]
+      properties:
+        name: {type: string}
+        count: {type: integer, minimum: 0}
+    GroupList:
+      type: object
+      required: [groups, tags]
+      properties:
+        groups:
+          type: array
+          items: {$ref: '#/components/schemas/NameCount'}
+        tags:
+          type: array
+          items: {$ref: '#/components/schemas/NameCount'}
+
+    # ------------------------------------------------------------------ tester
+    TraceStep:
+      type: object
+      description: One candidate rule the matcher looked at.
+      required: [rule_id, source, match_type, priority, matched, reason, path]
+      properties:
+        rule_id: {type: string}
+        source: {type: string}
+        match_type: {$ref: '#/components/schemas/MatchType'}
+        priority: {type: integer}
+        matched: {type: boolean}
+        reason:
+          type: string
+          description: '`matched`, `no_match`, `disabled`, `expired`, `scheduled`, `phase`, `query`, `host`, `language`, `scheme`, `condition`, `regex_error` or `unsafe_target`.'
+          enum: [matched, no_match, disabled, expired, scheduled, phase, query, host, language, scheme, condition, regex_error, unsafe_target]
+        path: {type: string, description: 'The path that was compared.'}
+
+    MatchResult:
+      type: object
+      description: Outcome of matching one request.
+      required: [rule_id, status, location, rules, captures, trace]
+      properties:
+        rule_id: {type: string, description: 'The rule that decided the response (the last one of a `continue` chain).'}
+
+        status: {$ref: '#/components/schemas/RuleStatus'}
+        location: {type: string, description: 'Final target, empty for 410 and 451.'}
+
+        rules:
+          type: array
+          description: Ids of all rules applied, in order.
+          items: {type: string}
+        captures:
+          type: object
+          description: Wildcard and regex captures by index or name.
+          additionalProperties: {type: string}
+        trace:
+          type: array
+          items: {$ref: '#/components/schemas/TraceStep'}
+    ChainHop:
+      type: object
+      required: [url, status, rule_id]
+      properties:
+        url: {type: string, description: 'URL as a visitor sees it, with base path and language prefix.'}
+
+        status: {type: integer, description: 'Status of this hop (200 or 404 for the last page).'}
+
+        rule_id: {type: [string, 'null'], description: 'Rule that answered, null for the final page.'}
+
+    TestRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          description: Absolute http(s) URL or a path.
+        method: {type: string, default: GET}
+        headers:
+          type: object
+          additionalProperties: {type: string}
+        cookies:
+          type: object
+          additionalProperties: {type: string}
+        language:
+          type: string
+          description: Language of the request when the URL carries none.
+        phase:
+          type: string
+          enum: [early, not_found, any]
+          default: any
+    TestResult:
+      type: object
+      required: [input, context, result, chain, final, trace, page_exists]
+      properties:
+        input:
+          type: object
+          required: [url, method, phase]
+          properties:
+            url: {type: string}
+            method: {type: string}
+            phase: {type: string, enum: [early, not_found, any]}
+        context:
+          type: object
+          description: The request as the matcher saw it.
+          required: [path, query, host, scheme, language, base_path, language_prefix, excluded]
+          properties:
+            path: {type: string}
+            query:
+              type: object
+              additionalProperties: true
+            host: {type: string}
+            scheme: {type: [string, 'null']}
+            language: {type: [string, 'null']}
+            base_path: {type: string}
+            language_prefix: {type: string}
+            excluded: {type: boolean, description: 'True when the path is excluded from matching.'}
+
+        result:
+          oneOf:
+            - $ref: '#/components/schemas/MatchResult'
+            - type: 'null'
+        chain:
+          type: array
+          items: {$ref: '#/components/schemas/ChainHop'}
+        final:
+          type: object
+          description: What the visitor ends up with.
+          required: [url, status]
+          properties:
+            url: {type: string}
+            status: {type: integer}
+            external: {type: boolean, description: 'The target is external and was not requested.'}
+
+            excluded: {type: boolean}
+            loop: {type: boolean, description: 'The chain came back to a URL it had visited.'}
+
+            truncated: {type: boolean, description: 'The chain was cut at the maximum depth.'}
+
+        trace:
+          type: array
+          items: {$ref: '#/components/schemas/TraceStep'}
+        page_exists: {type: boolean, description: 'A page exists for the requested path.'}
+
+
+    # ------------------------------------------------------------------ 404 monitor
+    UserAgentClass:
+      type: string
+      enum: [browser, bot, monitoring, unknown]
+    GroupRow:
+      type: object
+      description: All 404 hits of one path within the queried range.
+      required: [path, hits, first_seen, last_seen, top_referers, daily, ua, languages, hosts, sample_query, has_rule, best_suggestion, resolved]
+      properties:
+        path: {type: string}
+        hits: {type: integer, minimum: 1}
+        first_seen: {type: string, format: date-time}
+        last_seen: {type: string, format: date-time}
+        top_referers:
+          type: array
+          maxItems: 3
+          items:
+            type: object
+            required: [referer, hits]
+            properties:
+              referer: {type: string}
+              hits: {type: integer, minimum: 1}
+        daily: {$ref: '#/components/schemas/DayCounts'}
+        ua:
+          type: object
+          description: Hits by user agent class.
+          propertyNames: {$ref: '#/components/schemas/UserAgentClass'}
+          additionalProperties: {type: integer, minimum: 0}
+        languages:
+          type: array
+          description: Languages seen, most frequent first.
+          items: {type: string}
+        hosts:
+          type: array
+          items: {type: string}
+        sample_query: {type: string, description: 'Query string of the latest hit that had one.'}
+
+        has_rule: {type: boolean, description: 'A rule already answers this path.'}
+
+        best_suggestion:
+          oneOf:
+            - $ref: '#/components/schemas/Suggestion'
+            - type: 'null'
+        resolved: {type: boolean}
+    NotFoundPage:
+      type: object
+      description: List envelope of `listNotFound`.
+      required: [data, meta, links]
+      properties:
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/GroupRow'}
+        meta:
+          type: object
+          required: [pagination, total, page, per_page, totals]
+          properties:
+            pagination: {$ref: '#/components/schemas/Pagination'}
+            total: {type: integer, minimum: 0, description: 'Number of paths, same as `pagination.total`.'}
+
+            page: {type: integer, minimum: 1}
+            per_page: {type: integer, minimum: 1}
+            totals:
+              type: object
+              required: [hits, paths, by_day]
+              properties:
+                hits: {type: integer, minimum: 0}
+                paths: {type: integer, minimum: 0}
+                by_day: {$ref: '#/components/schemas/DayCounts'}
+        links: {$ref: '#/components/schemas/PaginationLinks'}
+    NotFoundEntry:
+      type: object
+      description: One logged 404 request.
+      required: [time, path, query, referer, ua, ua_class, language, host, method]
+      properties:
+        time: {type: string, format: date-time}
+        path: {type: string}
+        query: {type: string, description: 'Query string without `?`, secrets redacted.'}
+
+        referer: {type: string, description: 'Scheme, host and path of the referer.'}
+
+        ua: {type: string}
+        ua_class: {$ref: '#/components/schemas/UserAgentClass'}
+        language: {type: string}
+        host: {type: string}
+        method: {type: string}
+        ip: {type: string, description: 'Anonymized address; only present when the plugin stores it.'}
+
+    NotFoundTrend:
+      type: object
+      required: [days]
+      properties:
+        days: {$ref: '#/components/schemas/DayCounts'}
+    IgnoreResult:
+      type: object
+      required: [pattern, patterns, purged]
+      properties:
+        pattern: {type: string}
+        patterns:
+          type: array
+          description: The whole ignore list after the change.
+          items: {type: string}
+        purged: {type: integer, minimum: 0}
+
+    # ------------------------------------------------------------------ suggestions
+    SuggestionReason:
+      type: string
+      enum: [same_slug, other_language, similar_route, title_match, taxonomy_match, parent_fallback, home_fallback]
+    SuggestionSource:
+      type: string
+      description: '`404` from the monitor, `sitemap` from an old sitemap, `crawler` from a crawler export.'
+      enum: ['404', sitemap, crawler]
+    Suggestion:
+      type: object
+      description: A live suggested target for a 404 path.
+      required: [target, score, reason, page_title, details]
+      properties:
+        target: {type: string, description: 'Route of the suggested page, without language prefix.'}
+
+        score: {type: number, minimum: 0, maximum: 1, description: 'Rounded to three decimals.'}
+
+        reason: {$ref: '#/components/schemas/SuggestionReason'}
+        page_title: {type: string}
+        details:
+          type: object
+          description: Evidence that depends on the reason (matched slug, similarity, language).
+          additionalProperties: true
+    StoredSuggestion:
+      type: object
+      description: A suggestion stored for a 404 path.
+      required: [id, path, target, score, reason, page_title, hits, status, source, created_at, decided_at]
+      properties:
+        id: {type: string}
+        path: {type: string}
+        target: {type: string}
+        score: {type: number, minimum: 0, maximum: 1}
+        reason: {$ref: '#/components/schemas/SuggestionReason'}
+        page_title: {type: string}
+        hits: {type: integer, minimum: 0, description: '404 hits of the path in the last 90 days (known for the 500 busiest paths, else 0).'}
+
+        status: {type: string, enum: [open, accepted, rejected]}
+        source: {$ref: '#/components/schemas/SuggestionSource'}
+        created_at: {type: [string, 'null'], format: date-time}
+        decided_at: {type: [string, 'null'], format: date-time}
+    GenerateResult:
+      type: object
+      required: [paths, suggested, created, improved, rejected_before, no_suggestion, skipped_with_rule]
+      properties:
+        paths: {type: integer, minimum: 0, description: '404 paths looked at.'}
+
+        suggested: {type: integer, minimum: 0, description: 'Created plus improved.'}
+
+        created: {type: integer, minimum: 0}
+        improved: {type: integer, minimum: 0, description: 'Existing suggestions replaced by a better one.'}
+
+        rejected_before: {type: integer, minimum: 0, description: 'Paths where the user rejected the suggestion earlier.'}
+
+        no_suggestion: {type: integer, minimum: 0, description: 'No page reached the minimum score.'}
+
+        skipped_with_rule: {type: integer, minimum: 0, description: 'Paths a rule already covers.'}
+
+    AcceptResult:
+      type: object
+      required: [rule, suggestion]
+      properties:
+        rule: {$ref: '#/components/schemas/Rule'}
+        suggestion: {$ref: '#/components/schemas/StoredSuggestion'}
+    BulkAcceptResult:
+      type: object
+      description: A dry run returns `min_score`, `count` and `rows`; a real run adds `rules` and `skipped`.
+      required: [min_score, count, rows]
+      properties:
+        min_score: {type: number}
+        count: {type: integer, minimum: 0}
+        rows:
+          type: array
+          items: {$ref: '#/components/schemas/StoredSuggestion'}
+        rules:
+          type: array
+          description: The created rules (at most 500, rule fields only). Not present in a dry run.
+          items: {$ref: '#/components/schemas/Rule'}
+        skipped:
+          type: array
+          description: Suggestions whose rule failed validation. Not present in a dry run.
+          items:
+            type: object
+            required: [id, issues]
+            properties:
+              id: {type: string}
+              issues:
+                type: array
+                items: {$ref: '#/components/schemas/ValidationIssue'}
+
+    # ------------------------------------------------------------------ import and export
+    ImportFormatId:
+      type: string
+      enum: [csv, json, yaml, grav_site, htaccess, nginx, wordpress_json, wordpress_csv, crawler_csv, cloudflare_csv, netlify]
+    ImportFormat:
+      type: object
+      required: [id, label, import, export, extension, mime]
+      properties:
+        id: {$ref: '#/components/schemas/ImportFormatId'}
+        label: {type: string}
+        import: {type: boolean}
+        export: {type: boolean}
+        extension: {type: string}
+        mime: {type: string}
+    ImportOptions:
+      type: object
+      properties:
+        columns:
+          type: object
+          description: CSV column mapping, rule field to column name or zero-based index.
+          additionalProperties:
+            type: [string, integer]
+        delimiter: {type: string, description: 'CSV delimiter; `tab` means a tab character.'}
+        has_header: {type: boolean}
+        default_status: {$ref: '#/components/schemas/RuleStatus'}
+        default_group: {type: string}
+    ImportRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: File content as text, or base64 when `encoding` is `base64`. Limited by `import.max_mb` (10 MB by default).
+        encoding:
+          type: string
+          enum: [base64]
+          description: Omit for plain text.
+        filename: {type: string, description: 'Helps to detect the format.'}
+
+        format:
+          allOf:
+            - $ref: '#/components/schemas/ImportFormatId'
+          description: Detected from the file name and content when omitted. `cloudflare_csv` cannot be imported.
+        options: {$ref: '#/components/schemas/ImportOptions'}
+    ImportCommitRequest:
+      allOf:
+        - $ref: '#/components/schemas/ImportRequest'
+        - type: object
+          properties:
+            skip_duplicates:
+              type: boolean
+              default: true
+              description: Leave out rows that already exist as a rule or appear twice in the file.
+            skip_invalid:
+              type: boolean
+              default: false
+              description: Leave out rows with errors instead of stopping the import.
+            lines:
+              type: array
+              description: Import only the rows with these line numbers.
+              items: {type: integer, minimum: 1}
+    ImportIssue:
+      type: object
+      required: [code, message, params]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        params:
+          type: object
+          additionalProperties:
+            type: [string, number, boolean, 'null']
+    ImportRow:
+      type: object
+      required: [line, raw, rule, errors, warnings, duplicate_of, duplicate_in_file]
+      properties:
+        line: {type: integer, minimum: 1}
+        raw: {type: string, description: 'The source line, cut at 500 characters.'}
+
+        rule:
+          oneOf:
+            - $ref: '#/components/schemas/Rule'
+            - type: 'null'
+          description: The rule that would be created; null when the row has errors.
+        errors:
+          type: array
+          items: {$ref: '#/components/schemas/ImportIssue'}
+        warnings:
+          type: array
+          items: {$ref: '#/components/schemas/ImportIssue'}
+        duplicate_of: {type: [string, 'null'], description: 'Id of the existing rule this row duplicates.'}
+
+        duplicate_in_file: {type: boolean}
+    ImportPreview:
+      type: object
+      required: [format, counts, errors, warnings, rows, not_found_paths, relations_checked]
+      properties:
+        format:
+          oneOf:
+            - $ref: '#/components/schemas/ImportFormatId'
+            - type: 'null'
+        counts:
+          type: object
+          required: [total, valid, errors, duplicates, warnings, skipped, not_found]
+          properties:
+            total: {type: integer, minimum: 0}
+            valid: {type: integer, minimum: 0}
+            errors: {type: integer, minimum: 0}
+            duplicates: {type: integer, minimum: 0}
+            warnings: {type: integer, minimum: 0}
+            skipped: {type: integer, minimum: 0}
+            not_found: {type: integer, minimum: 0}
+        errors:
+          type: array
+          description: File-level problems. When present, no rows are produced.
+          items: {$ref: '#/components/schemas/ImportIssue'}
+        warnings:
+          type: array
+          description: File-level notes.
+          items: {$ref: '#/components/schemas/ImportIssue'}
+        rows:
+          type: array
+          items: {$ref: '#/components/schemas/ImportRow'}
+        not_found_paths:
+          type: array
+          description: 404 candidates of crawler exports; they become suggestions, not rules.
+          items: {type: string}
+        relations_checked:
+          type: boolean
+          description: False for imports of more than 300 rules, which get field checks but no chain and conflict checks.
+    ImportCommitResult:
+      type: object
+      required: [format, created, skipped, rules, rules_truncated, suggestions, not_found]
+      properties:
+        format:
+          oneOf:
+            - $ref: '#/components/schemas/ImportFormatId'
+            - type: 'null'
+        created: {type: integer, minimum: 0}
+        skipped: {type: integer, minimum: 0}
+        rules:
+          type: array
+          description: The created rules, at most 500 (rule fields only).
+          items: {$ref: '#/components/schemas/Rule'}
+        rules_truncated: {type: boolean}
+        suggestions: {type: integer, minimum: 0, description: 'Suggestions created from crawler 404 candidates.'}
+
+        not_found: {type: integer, minimum: 0, description: 'Number of 404 candidates in the file.'}
+
+    SitemapDiff:
+      type: object
+      required: [total, existing, redirected, missing, missing_paths, suggestions_created]
+      properties:
+        total: {type: integer, minimum: 0, description: 'Unique paths compared.'}
+
+        existing: {type: integer, minimum: 0, description: 'Paths that are a page route in any language.'}
+
+        redirected: {type: integer, minimum: 0, description: 'Paths a rule already covers.'}
+
+        missing: {type: integer, minimum: 0, description: 'Paths that are neither.'}
+
+        missing_paths:
+          type: array
+          items: {type: string}
+        suggestions_created: {type: integer, minimum: 0}
+    ExportNote:
+      type: object
+      required: [rule_id, code, reason]
+      properties:
+        rule_id: {type: string}
+        code: {type: string}
+        reason: {type: string}
+    ExportResult:
+      type: object
+      required: [filename, mime, content, skipped, lossy, exported]
+      properties:
+        filename: {type: string}
+        mime: {type: string}
+        content: {type: string, description: 'The file as text.'}
+
+        skipped:
+          type: array
+          description: Rules the format cannot express, left out.
+          items: {$ref: '#/components/schemas/ExportNote'}
+        lossy:
+          type: array
+          description: Rules exported with a loss of information.
+          items: {$ref: '#/components/schemas/ExportNote'}
+        exported: {type: integer, minimum: 0}
+    SiteConfig:
+      type: object
+      description: Grav's own settings; empty sections are `{}`.
+      required: [redirects, routes, settings]
+      properties:
+        redirects:
+          type: object
+          description: '`site.redirects`, a map of regular expression to target.'
+          additionalProperties: true
+        routes:
+          type: object
+          description: '`site.routes`, a map of alias to route.'
+          additionalProperties: true
+        settings:
+          type: object
+          description: The `system.pages.redirect_*` settings.
+          additionalProperties: true
+
+    # ------------------------------------------------------------------ checks and stats
+    Stats:
+      type: object
+      required:
+        - not_found_today
+        - not_found_7d
+        - not_found_by_day
+        - hits_today
+        - hits_7d
+        - hits_by_day
+        - rules_total
+        - rules_active
+        - open_suggestions
+        - dead_targets
+        - pending_deletes
+      properties:
+        not_found_today: {type: integer, minimum: 0}
+        not_found_7d: {type: integer, minimum: 0}
+        not_found_by_day:
+          allOf:
+            - $ref: '#/components/schemas/DayCounts'
+          description: Last 30 days, oldest first, zero filled.
+        hits_today: {type: integer, minimum: 0, description: 'Redirect hits.'}
+
+        hits_7d: {type: integer, minimum: 0}
+        hits_by_day:
+          allOf:
+            - $ref: '#/components/schemas/DayCounts'
+          description: Last 30 days, oldest first, zero filled.
+        rules_total: {type: integer, minimum: 0}
+        rules_active: {type: integer, minimum: 0}
+        open_suggestions: {type: integer, minimum: 0}
+        dead_targets: {type: integer, minimum: 0, description: 'Enabled rules whose target failed the last live check.'}
+
+        pending_deletes: {type: integer, minimum: 0}
+    CheckResult:
+      type: object
+      description: Result of the live check of one rule target.
+      required: [rule_id, url, status, ok, error, final_url, redirects, duration_ms, checked_at, source, target]
+      properties:
+        rule_id: {type: string}
+        url: {type: string, description: 'The URL that was requested.'}
+
+        status: {type: [integer, 'null'], description: 'HTTP status; null when no response came.'}
+
+        ok: {type: boolean}
+        error:
+          type: [string, 'null']
+          description: '`timeout`, `dns`, `tls`, `connection` and `too_many_redirects` mean the target is dead. `invalid_url`, `skipped_external`, `skipped_dynamic`, `rate_limited` and `blocked_private` mean no request was made.'
+          enum: [timeout, dns, tls, connection, too_many_redirects, invalid_url, skipped_external, skipped_dynamic, rate_limited, blocked_private, null]
+        final_url: {type: [string, 'null']}
+        redirects: {type: integer, minimum: 0}
+        duration_ms: {type: integer, minimum: 0}
+        checked_at: {type: string, format: date-time}
+        source: {type: [string, 'null'], description: 'Source of the rule.'}
+
+        target: {type: [string, 'null'], description: 'Target of the rule.'}
+
+    CheckList:
+      type: object
+      required: [last_run, results]
+      properties:
+        last_run: {type: [string, 'null'], format: date-time}
+        results:
+          type: array
+          items: {$ref: '#/components/schemas/CheckResult'}
+    CheckRun:
+      type: object
+      required: [last_run, checked, dead, results]
+      properties:
+        last_run: {type: [string, 'null'], format: date-time}
+        checked: {type: integer, minimum: 0, description: 'Targets that were requested.'}
+
+        dead: {type: integer, minimum: 0}
+        results:
+          type: array
+          items: {$ref: '#/components/schemas/CheckResult'}
+    PageHit:
+      type: object
+      required: [route, title, language, translations]
+      properties:
+        route: {type: string}
+        title: {type: string}
+        language: {type: string, description: 'Empty on single-language sites.'}
+
+        translations:
+          type: array
+          description: Languages this page exists in.
+          items: {type: string}
+
+    # ------------------------------------------------------------------ auto redirects
+    PendingDelete:
+      type: object
+      description: A deleted page waiting for the editor's decision.
+      required: [id, title, route, routes, languages, children, children_count, deleted_at, suggested_parent]
+      properties:
+        id: {type: string}
+        title: {type: string}
+        route: {type: string, description: 'Primary route of the deleted page.'}
+
+        routes:
+          type: object
+          description: Route by language.
+          additionalProperties: {type: string}
+        languages:
+          type: array
+          items: {type: string}
+        children:
+          type: array
+          description: Routes of the descendants that were deleted with the page (at most 50).
+          items: {type: string}
+        children_count: {type: integer, minimum: 0}
+        deleted_at: {type: string, format: date-time}
+        suggested_parent: {type: [string, 'null'], description: 'Nearest ancestor route that still exists.'}
+
+    PendingResolveResult:
+      type: object
+      required: [id, action, created, updated, deleted, notes]
+      properties:
+        id: {type: string}
+        action:
+          type: string
+          enum: [gone, parent, redirect, dismiss]
+        created:
+          type: array
+          items: {$ref: '#/components/schemas/Rule'}
+        updated:
+          type: array
+          items: {$ref: '#/components/schemas/Rule'}
+        deleted:
+          type: array
+          description: Ids of removed rules.
+          items: {type: string}
+        notes:
+          type: array
+          items:
+            type: object
+            required: [kind, source, message]
+            properties:
+              kind: {type: string}
+              source: {type: string}
+              message: {type: string}
+    Badge:
+      type: object
+      required: [count, unseen, pending]
+      properties:
+        count: {type: integer, minimum: 0, description: '`unseen` plus `pending`.'}
+        unseen: {type: integer, minimum: 0, description: 'Auto rules the editor has not seen.'}
+
+        pending: {type: integer, minimum: 0, description: 'Pending decisions.'}
+

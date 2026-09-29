@@ -12,14 +12,15 @@ use Grav\Events\PageEvent;
 use Grav\Events\PermissionsRegisterEvent;
 use Grav\Events\PluginsLoadedEvent;
 use Grav\Framework\Acl\PermissionsReader;
+use Grav\Plugin\RedirectManager\Auto\AutoRedirectListener;
 use Grav\Plugin\RedirectManager\Domain\MatchPhase;
 use Grav\Plugin\RedirectManager\Domain\MatchResult;
 use Grav\Plugin\RedirectManager\Domain\StatusCode;
-use Grav\Plugin\RedirectManager\Grav\GravPageIndexBuilder;
-use Grav\Plugin\RedirectManager\Grav\PageIndexCache;
+use Grav\Plugin\RedirectManager\Grav\GravBootstrap;
 use Grav\Plugin\RedirectManager\Grav\RedirectLookup;
 use Grav\Plugin\RedirectManager\Grav\RequestContextResult;
 use Grav\Plugin\RedirectManager\Grav\RuleEvents;
+use Grav\Plugin\RedirectManager\Grav\SchedulerJobs;
 use Grav\Plugin\RedirectManager\Grav\ServiceFactory;
 use Grav\Plugin\RedirectManager\Grav\TwigExtension;
 use RocketTheme\Toolbox\Event\Event;
@@ -33,6 +34,8 @@ class RedirectManagerPlugin extends Plugin
     public const SLUG = 'redirect-manager';
 
     private ?ServiceFactory $services = null;
+
+    private ?AutoRedirectListener $auto = null;
 
     /** Request as seen at PluginsLoadedEvent; false = nothing to do for this request (excluded, invalid, disabled). */
     private RequestContextResult|false|null $request = null;
@@ -61,6 +64,18 @@ class RedirectManagerPlugin extends Plugin
             'onApiSidebarItems' => ['onApiSidebarItems', 0],
             'onApiPluginPageInfo' => ['onApiPluginPageInfo', 0],
             'onApiDashboardWidgets' => ['onApiDashboardWidgets', 0],
+            // Two listeners: the plugin's REST routes and the auto-redirect routes (pending decisions, badge).
+            'onApiRegisterRoutes' => [['onApiRegisterRoutes', 0], ['onApiRegisterAutoRoutes', 0]],
+            // Page changes through the API plugin (Admin 2, REST, MCP): automatic redirects. Never fired without the API plugin.
+            'onApiBeforePageUpdate' => ['onApiBeforePageUpdate', 0],
+            'onApiPageUpdated' => ['onApiPageUpdated', 0],
+            'onApiPageMoved' => ['onApiPageMoved', 0],
+            'onApiBeforePageDelete' => ['onApiBeforePageDelete', 0],
+            'onApiPageDeleted' => ['onApiPageDeleted', 0],
+            'onApiBeforePagesReorganize' => ['onApiBeforePagesReorganize', 0],
+            'onApiPagesReorganized' => ['onApiPagesReorganized', 0],
+            // Scheduler jobs (only fired in scheduler runs, never on page requests).
+            'onSchedulerInitialized' => ['onSchedulerInitialized', 0],
         ];
     }
 
@@ -226,48 +241,76 @@ class RedirectManagerPlugin extends Plugin
      */
     public function services(): ServiceFactory
     {
-        if ($this->services !== null) {
-            return $this->services;
-        }
-
-        /** @var \Grav\Common\Config\Config $config */
-        $config = $this->grav['config'];
-        /** @var \RocketTheme\Toolbox\ResourceLocator\UniformResourceLocator $locator */
-        $locator = $this->grav['locator'];
-
-        $languages = array_values(array_filter(
-            array_map(static fn (mixed $l): string => is_scalar($l) ? trim((string) $l) : '', (array) $config->get('system.languages.supported', [])),
-            static fn (string $l): bool => $l !== '',
-        ));
-        $default = (string) $config->get('system.languages.default_lang', '');
-        if ($default === '' && $languages !== []) {
-            $default = $languages[0];
-        }
-
-        $cacheDir = rtrim((string) $locator->findResource('cache://', true, true), '/') . '/' . self::SLUG;
-        $factory = new ServiceFactory(
-            (array) $config->get('plugins.' . self::SLUG, []),
-            [
-                'languages' => $languages,
-                'default_language' => $default,
-                'custom_base_url' => (string) $config->get('system.custom_base_url', ''),
-                'api_route' => (string) $config->get('plugins.api.route', '/api'),
-                'admin_route' => (string) $config->get('plugins.admin2.route', '/admin'),
-            ],
-            rtrim((string) $locator->findResource('user://data', true, true), '/') . '/' . self::SLUG,
-            $cacheDir,
-            $this->grav['log'],
-            null,
-            fn () => (new GravPageIndexBuilder($this->grav, new PageIndexCache($cacheDir)))->index(),
-        );
-
-        return $this->services = $factory;
+        return $this->services ??= GravBootstrap::factory($this->grav);
     }
 
     /** Fires onRedirectRuleSaved and friends; the API, the CLI and the auto-redirect listener use it. */
     public function events(): RuleEvents
     {
         return RuleEvents::fromGrav($this->grav);
+    }
+
+    /** Automatic redirects for page changes (also used by the REST controller to resolve pending deletes). */
+    public function autoRedirects(): AutoRedirectListener
+    {
+        return $this->auto ??= new AutoRedirectListener($this->grav, $this->services(), $this->events());
+    }
+
+    public function onApiBeforePageUpdate(Event $event): void
+    {
+        $this->autoRedirects()->onBeforePageUpdate($event);
+    }
+
+    public function onApiPageUpdated(Event $event): void
+    {
+        $this->autoRedirects()->onPageUpdated($event);
+    }
+
+    public function onApiPageMoved(Event $event): void
+    {
+        $this->autoRedirects()->onPageMoved($event);
+    }
+
+    public function onApiBeforePageDelete(Event $event): void
+    {
+        $this->autoRedirects()->onBeforePageDelete($event);
+    }
+
+    public function onApiPageDeleted(Event $event): void
+    {
+        $this->autoRedirects()->onPageDeleted($event);
+    }
+
+    public function onApiBeforePagesReorganize(Event $event): void
+    {
+        $this->autoRedirects()->onBeforePagesReorganize($event);
+    }
+
+    public function onApiPagesReorganized(Event $event): void
+    {
+        $this->autoRedirects()->onPagesReorganized($event);
+    }
+
+    /** /redirects/pending, /redirects/pending/{id}/resolve, /redirects/badge, /redirects/badge/seen. */
+    public function onApiRegisterAutoRoutes(Event $event): void
+    {
+        $routes = $event['routes'];
+        $auto = \Grav\Plugin\RedirectManager\Api\AutoRedirectController::class;
+
+        $routes->get('/redirects/pending', [$auto, 'pending']);
+        $routes->post('/redirects/pending/{id}/resolve', [$auto, 'resolve']);
+        $routes->get('/redirects/badge', [$auto, 'badge']);
+        $routes->post('/redirects/badge/seen', [$auto, 'badgeSeen']);
+    }
+
+    /** redirect-manager-maintenance, -check-targets and -digest: see SchedulerJobs. */
+    public function onSchedulerInitialized(Event $event): void
+    {
+        try {
+            SchedulerJobs::register($event['scheduler'], $this->services());
+        } catch (Throwable $e) {
+            $this->logFailure('scheduler registration', $e);
+        }
     }
 
     private function requestContext(): ?RequestContextResult
@@ -388,6 +431,61 @@ class RedirectManagerPlugin extends Plugin
         $event->permissions->addActions($actions);
     }
 
+    /**
+     * REST routes below the API prefix (docs/API.md). Static routes come before parameterized ones.
+     * The /redirects/pending* and /redirects/badge routes belong to the auto-redirect controller.
+     */
+    public function onApiRegisterRoutes(Event $event): void
+    {
+        $routes = $event['routes'];
+        $rules = \Grav\Plugin\RedirectManager\Api\ApiController::class;
+        $notFound = \Grav\Plugin\RedirectManager\Api\NotFoundApiController::class;
+        $suggestions = \Grav\Plugin\RedirectManager\Api\SuggestionApiController::class;
+        $files = \Grav\Plugin\RedirectManager\Api\ImportExportApiController::class;
+        $system = \Grav\Plugin\RedirectManager\Api\SystemApiController::class;
+
+        $routes->get('/redirects/rules', [$rules, 'index']);
+        $routes->post('/redirects/rules', [$rules, 'create']);
+        $routes->post('/redirects/rules/restore', [$rules, 'restore']);
+        $routes->post('/redirects/rules/bulk', [$rules, 'bulk']);
+        $routes->post('/redirects/rules/reorder', [$rules, 'reorder']);
+        $routes->post('/redirects/rules/validate', [$rules, 'validate']);
+        $routes->get('/redirects/rules/{id}', [$rules, 'show']);
+        $routes->patch('/redirects/rules/{id}', [$rules, 'update']);
+        $routes->delete('/redirects/rules/{id}', [$rules, 'delete']);
+        $routes->post('/redirects/rules/{id}/shorten-chain', [$rules, 'shortenChain']);
+        $routes->get('/redirects/analysis', [$rules, 'analysis']);
+        $routes->get('/redirects/groups', [$rules, 'groups']);
+        $routes->post('/redirects/test', [$rules, 'test']);
+
+        $routes->get('/redirects/404', [$notFound, 'index']);
+        $routes->delete('/redirects/404', [$notFound, 'delete']);
+        $routes->get('/redirects/404/trend', [$notFound, 'trend']);
+        $routes->get('/redirects/404/entries', [$notFound, 'entries']);
+        $routes->post('/redirects/404/ignore', [$notFound, 'ignore']);
+        $routes->post('/redirects/404/resolve', [$notFound, 'resolve']);
+
+        $routes->get('/redirects/suggest', [$suggestions, 'suggest']);
+        $routes->get('/redirects/suggestions', [$suggestions, 'index']);
+        $routes->post('/redirects/suggestions/generate', [$suggestions, 'generate']);
+        $routes->post('/redirects/suggestions/bulk-accept', [$suggestions, 'bulkAccept']);
+        $routes->post('/redirects/suggestions/{id}/accept', [$suggestions, 'accept']);
+        $routes->post('/redirects/suggestions/{id}/reject', [$suggestions, 'reject']);
+
+        $routes->get('/redirects/import/formats', [$files, 'formats']);
+        $routes->post('/redirects/import/preview', [$files, 'preview']);
+        $routes->post('/redirects/import/commit', [$files, 'commit']);
+        $routes->post('/redirects/import/sitemap', [$files, 'sitemap']);
+        $routes->get('/redirects/export', [$files, 'export']);
+        $routes->get('/redirects/site-config', [$files, 'siteConfig']);
+        $routes->post('/redirects/site-config/import', [$files, 'siteConfigImport']);
+
+        $routes->get('/redirects/stats', [$system, 'stats']);
+        $routes->get('/redirects/checks', [$system, 'checks']);
+        $routes->post('/redirects/checks/run', [$system, 'runChecks']);
+        $routes->get('/redirects/pages', [$system, 'pages']);
+    }
+
     public function onApiSidebarItems(Event $event): void
     {
         $items = $event['items'] ?? [];
@@ -398,6 +496,8 @@ class RedirectManagerPlugin extends Plugin
             'icon' => 'fa-route',
             'route' => '/plugin/' . self::SLUG,
             'priority' => 5,
+            // Unseen automatic redirects plus deleted pages waiting for a decision.
+            'badgeEndpoint' => '/redirects/badge',
             'authorize' => ['admin.super', 'api.super', 'api.redirects.read'],
         ];
         $event['items'] = $items;

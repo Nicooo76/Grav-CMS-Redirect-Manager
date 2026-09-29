@@ -71,4 +71,14 @@ final class RuleEvents
     {
         ($this->dispatch)('onNotFoundLogged', $payload);
     }
+
+    /**
+     * onSuggestionCreated: a stored suggestion was created or improved.
+     *
+     * @param array<string, mixed> $suggestion the stored record (id, path, target, score, reason, ...)
+     */
+    public function suggestionCreated(array $suggestion): void
+    {
+        ($this->dispatch)('onSuggestionCreated', ['suggestion' => $suggestion]);
+    }
 }

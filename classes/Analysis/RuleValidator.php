@@ -66,6 +66,15 @@ final class RuleValidator
     }
 
     /**
+     * Only the checks that look at the candidate itself (fields, regex, target safety, dates), without relating it
+     * to other rules. For bulk imports where the relational pass per row would cost too much.
+     */
+    public function validateFields(Rule $candidate): ValidationResult
+    {
+        return new ValidationResult($this->fieldIssues($candidate));
+    }
+
+    /**
      * What the rules would do with $sampleUrl if the candidate were saved: the Matcher's result (rule_id,
      * status, location, rules, captures, trace) plus "matched_candidate". Null when no rule matches or the URL
      * is unusable. A missing host, scheme or language is taken from the candidate's conditions, so a rule

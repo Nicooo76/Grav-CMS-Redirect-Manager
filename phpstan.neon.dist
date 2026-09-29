@@ -9,5 +9,7 @@ parameters:
     scanDirectories:
         - .grav/2.2.2/system/src
         - .grav/2.2.2/vendor
+        - .grav/2.2.2/user/plugins/api/classes
+        - .grav/2.2.2/user/plugins/email/classes
     tmpDir: build/phpstan
     treatPhpDocTypesAsCertain: false

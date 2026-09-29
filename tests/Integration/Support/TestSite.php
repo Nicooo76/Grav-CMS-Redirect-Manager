@@ -359,8 +359,14 @@ final class TestSite
 
     private static function freePort(): int
     {
+        // RM_PORT_RANGE="8300-8399" keeps parallel test runs (other suites, the dev site) apart.
+        $min = 8100;
+        $max = 8999;
+        if (preg_match('/^(\d+)-(\d+)$/', (string) getenv('RM_PORT_RANGE'), $m) === 1 && (int) $m[1] <= (int) $m[2]) {
+            [$min, $max] = [(int) $m[1], (int) $m[2]];
+        }
         for ($i = 0; $i < 50; $i++) {
-            $port = random_int(8100, 8999);
+            $port = random_int($min, $max);
             $socket = @stream_socket_server('tcp://127.0.0.1:' . $port);
             if ($socket !== false) {
                 fclose($socket);

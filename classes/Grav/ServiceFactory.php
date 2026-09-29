@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Grav\Plugin\RedirectManager\Grav;
 
 use Closure;
+use Grav\Plugin\RedirectManager\Auto\AutoRedirectConfig;
+use Grav\Plugin\RedirectManager\Auto\AutoState;
 use Grav\Plugin\RedirectManager\Check\CheckResultStore;
 use Grav\Plugin\RedirectManager\Matching\Matcher;
 use Grav\Plugin\RedirectManager\Matching\MatcherOptions;
@@ -19,6 +21,8 @@ use Grav\Plugin\RedirectManager\NotFound\NotFoundLoggerOptions;
 use Grav\Plugin\RedirectManager\NotFound\ResolvedPaths;
 use Grav\Plugin\RedirectManager\NotFound\SqliteLogStore;
 use Grav\Plugin\RedirectManager\NotFound\UserAgentClassifier;
+use Grav\Plugin\RedirectManager\Notify\ThresholdTracker;
+use Grav\Plugin\RedirectManager\Notify\WebhookNotifier;
 use Grav\Plugin\RedirectManager\Security\TargetGuard;
 use Grav\Plugin\RedirectManager\Stats\HitRecorder;
 use Grav\Plugin\RedirectManager\Stats\StatsStore;
@@ -29,6 +33,8 @@ use Grav\Plugin\RedirectManager\Suggest\SuggestionStore;
 use Grav\Plugin\RedirectManager\Util\Clock;
 use Grav\Plugin\RedirectManager\Util\SystemClock;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
  * Creates the plugin's services on demand from plain arrays (no Grav objects), so the hot path only
@@ -46,7 +52,7 @@ final class ServiceFactory
 
     /**
      * @param array<string, mixed>                                                                                 $config
-     * @param array{languages?: list<string>, default_language?: string, custom_base_url?: string, api_route?: string, admin_route?: string} $site
+     * @param array{languages?: list<string>, default_language?: string, custom_base_url?: string, api_route?: string, admin_route?: string, base_url?: string, site_title?: string} $site
      * @param Closure(): PageIndex|null                                                                            $pageIndexProvider
      */
     public function __construct(
@@ -285,6 +291,57 @@ final class ServiceFactory
     {
         /** @var CheckResultStore */
         return $this->instances[__FUNCTION__] ??= new CheckResultStore($this->dataDir . '/target-checks.json');
+    }
+
+    /** Remembers which 404 paths and dead targets were already reported by webhook (notify-state.json). */
+    public function thresholdTracker(): ThresholdTracker
+    {
+        /** @var ThresholdTracker */
+        return $this->instances[__FUNCTION__] ??= new ThresholdTracker($this->dataDir . '/notify-state.json', $this->clock());
+    }
+
+    /**
+     * The webhook sender, or null when notifications.webhook_url is empty. The secret comes from the environment
+     * variable REDIRECT_MANAGER_WEBHOOK_SECRET, else from notifications.webhook_secret.
+     */
+    public function webhookNotifier(?HttpClientInterface $client = null): ?WebhookNotifier
+    {
+        $url = trim($this->string('notifications.webhook_url', ''));
+        if ($url === '') {
+            return null;
+        }
+        $secret = getenv('REDIRECT_MANAGER_WEBHOOK_SECRET');
+        if (!is_string($secret) || $secret === '') {
+            $secret = $this->string('notifications.webhook_secret', '');
+        }
+
+        return new WebhookNotifier($client ?? HttpClient::create(), $this->clock(), $url, $secret, 5, $this->siteTitle());
+    }
+
+    /** Public root URL for runs without a request (scheduler, CLI): plugin config base_url, then system.custom_base_url. */
+    public function siteUrl(): string
+    {
+        return rtrim($this->site['base_url'] ?? '', '/');
+    }
+
+    public function siteTitle(): string
+    {
+        return $this->site['site_title'] ?? '';
+    }
+
+    /** Pending deleted pages, unseen auto rules (sidebar badge): auto-state.json. */
+    public function autoState(): AutoState
+    {
+        /** @var AutoState */
+        return $this->instances[__FUNCTION__] ??= new AutoState($this->dataDir . '/auto-state.json', $this->clock());
+    }
+
+    /** The auto_redirect.* settings. */
+    public function autoRedirectConfig(): AutoRedirectConfig
+    {
+        $section = $this->config('auto_redirect', []);
+
+        return AutoRedirectConfig::fromArray(is_array($section) ? $section : []);
     }
 
     /** Page index for suggestions and the target picker. Only available inside Grav (provider set by the plugin). */

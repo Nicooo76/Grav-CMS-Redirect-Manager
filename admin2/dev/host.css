@@ -1,0 +1,317 @@
+/* Admin 2 host tokens, copied from grav-admin-next/src/routes/layout.css (light + .dark). */
+:root {
+  color-scheme: light;
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(240 10% 3.9%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(240 10% 3.9%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(240 10% 3.9%);
+  --primary: hsl(221 83% 53%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(240 4.8% 95.9%);
+  --secondary-foreground: hsl(240 5.9% 10%);
+  --muted: hsl(240 4.8% 95.9%);
+  --muted-foreground: hsl(240 3.8% 46.1%);
+  --accent: hsl(240 4.8% 95.9%);
+  --accent-foreground: hsl(240 5.9% 10%);
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --success: hsl(142 71% 40%);
+  --success-foreground: hsl(0 0% 100%);
+  --warning: hsl(38 92% 48%);
+  --warning-foreground: hsl(38 92% 12%);
+  --border: hsl(240 5.9% 90%);
+  --input: hsl(240 5.9% 90%);
+  --ring: hsl(221 83% 53%);
+  --radius: 0.5rem;
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(240 5.3% 26.1%);
+  --sidebar-border: hsl(220 13% 91%);
+  --sidebar-accent: hsl(240 4.8% 95.9%);
+  --sidebar-accent-foreground: hsl(240 5.9% 10%);
+  /* Tailwind v4 theme scale the host emits */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+}
+.dark {
+  color-scheme: dark;
+  --background: hsl(240 6% 10.6%);
+  --foreground: hsl(0 0% 98%);
+  --card: hsl(240 4.5% 13%);
+  --card-foreground: hsl(0 0% 98%);
+  --popover: hsl(240 4.5% 14.5%);
+  --popover-foreground: hsl(0 0% 98%);
+  --primary: hsl(217 91% 60%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(240 3.7% 15.9%);
+  --secondary-foreground: hsl(0 0% 98%);
+  --muted: hsl(240 3.7% 15.9%);
+  --muted-foreground: hsl(240 5% 64.9%);
+  --accent: hsl(240 3.7% 15.9%);
+  --accent-foreground: hsl(0 0% 98%);
+  --destructive: hsl(0 62.8% 30.6%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --success: hsl(142 60% 45%);
+  --success-foreground: hsl(0 0% 100%);
+  --warning: hsl(38 90% 55%);
+  --warning-foreground: hsl(38 92% 10%);
+  --border: hsl(240 4% 20%);
+  --input: hsl(240 4% 22%);
+  --ring: hsl(217 91% 60%);
+  --sidebar: hsl(240 5.9% 10%);
+  --sidebar-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-accent: hsl(240 3.7% 15.9%);
+  --sidebar-accent-foreground: hsl(0 0% 98%);
+}
+* {
+  border-color: var(--border);
+}
+html {
+  font-size: var(--app-font-size, 16px);
+}
+body {
+  margin: 0;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans, 'Google Sans', 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- fake host shell --- */
+.shell {
+  display: grid;
+  grid-template-columns: 14rem 1fr;
+  min-block-size: 100vh;
+}
+.shell aside {
+  background: var(--sidebar);
+  color: var(--sidebar-foreground);
+  border-inline-end: 1px solid var(--sidebar-border);
+  padding: 1rem 0.75rem;
+  font-size: 0.875rem;
+}
+.shell aside .brand {
+  font-weight: 600;
+  padding: 0.25rem 0.5rem 1rem;
+}
+.shell aside a {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.375rem;
+  color: inherit;
+  text-decoration: none;
+}
+.shell aside a.active {
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+  font-weight: 500;
+}
+.shell main {
+  min-inline-size: 0;
+}
+.shell header.head {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--background);
+  padding: 1.5rem 1.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.shell header.head h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.shell .content {
+  padding: 0.5rem 1.5rem 1.5rem;
+}
+.hbtn {
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+.hbtn.primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: transparent;
+}
+.hbtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ring);
+}
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .shell aside {
+    display: none;
+  }
+}
+
+/* --- harness controls --- */
+.devbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.375rem 1.5rem;
+  border-block-end: 1px dashed var(--border);
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+.devbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.devbar select,
+.devbar button,
+.devbar input {
+  font: inherit;
+  font-size: 0.6875rem;
+  height: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0 0.375rem;
+}
+
+/* --- fake host toast (sonner look-alike) --- */
+.fake-toasts {
+  position: fixed;
+  inset-block-end: 1rem;
+  inset-inline-end: 1rem;
+  z-index: 999999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-inline-size: 22rem;
+}
+.fake-toast {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  font-size: 0.8125rem;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
+}
+.fake-toast button.act {
+  margin-inline-start: auto;
+  height: 1.5rem;
+  padding: 0 0.5rem;
+  border-radius: 0.25rem;
+  border: 0;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.fake-toast .x {
+  border: 0;
+  background: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+.fake-toast.error {
+  border-color: hsl(0 70% 50% / 0.5);
+}
+.fake-toast.success {
+  border-color: hsl(142 60% 40% / 0.5);
+}
+
+/* --- fake host dialogs (ConfirmModal look-alike) --- */
+.fake-dlg-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(23 23 23 / 0.75);
+  backdrop-filter: blur(4px);
+}
+.fake-dlg {
+  inline-size: 100%;
+  max-inline-size: 28rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  color: var(--card-foreground);
+  padding: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+}
+.fake-dlg h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.fake-dlg p {
+  margin: 0.375rem 0 0;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+.fake-dlg .acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-block-start: 1.25rem;
+}
+.fake-dlg label {
+  display: block;
+  margin-block-start: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.fake-dlg input[type='text'],
+.fake-dlg input[type='number'],
+.fake-dlg select,
+.fake-dlg textarea {
+  display: block;
+  inline-size: 100%;
+  box-sizing: border-box;
+  margin-block-start: 0.25rem;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--input);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+}
+.fake-dlg textarea {
+  height: 5rem;
+  padding-block: 0.5rem;
+}

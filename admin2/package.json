@@ -1,0 +1,35 @@
+{
+  "name": "redirect-manager-admin2",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Admin 2 UI (page + dashboard widget) for the Grav 2 Redirect Manager plugin. Builds two self-contained ES files into ../admin-next/.",
+  "scripts": {
+    "dev": "vite --config vite.dev.config.ts --open /dev/index.html",
+    "build": "npm run build:page && npm run build:widget && node scripts/check-bundles.mjs",
+    "build:page": "vite build --config vite.config.ts --mode page",
+    "build:widget": "vite build --config vite.config.ts --mode widget",
+    "i18n": "node scripts/gen-i18n.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "svelte-check --tsconfig ./tsconfig.json --threshold warning",
+    "e2e": "node e2e/run.mjs",
+    "e2e:bundle": "RM_BUNDLE=1 node e2e/run.mjs",
+    "e2e:interact": "node e2e/interact.mjs",
+    "e2e:real": "node e2e/real-admin.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@types/node": "^26.6.3",
+    "happy-dom": "^20.14.5",
+    "lucide-svelte": "^1.0.1",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2",
+    "yaml": "^2.9.1"
+  }
+}

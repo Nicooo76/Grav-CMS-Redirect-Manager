@@ -1,0 +1,9 @@
+source,target,status,match_type,group,note
+/old-about,/about,301,exact,Relaunch 2026,Team page
+/blog/2019/*,/journal/$1,301,wildcard,Blog,
+/broken,,301,exact,,missing target
+/shop/(\d+,/products/$1,301,regex,Shop,invalid regex
+/old-about,/about-us,301,exact,Relaunch 2026,duplicate in file
+/blog/fehler-video,/journal/fehler-video,301,exact,Blog,duplicate of an existing rule
+/legal,/impressum,999,exact,,bad status
+/contact-us,/contact,302,exact,Relaunch 2026,

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redirect Manager: dev harness</title>
+  </head>
+  <body data-harness="page">
+    <div id="devbar" class="devbar"></div>
+    <div class="shell">
+      <aside aria-label="Fake sidebar">
+        <div class="brand">Grav Admin (harness)</div>
+        <a href="#">Dashboard</a>
+        <a href="#">Pages</a>
+        <a class="active" href="#">Redirects</a>
+        <a href="#">Plugins</a>
+      </aside>
+      <main>
+        <header class="head">
+          <h1>Redirects</h1>
+        </header>
+        <div class="content"><div id="mount"></div></div>
+      </main>
+    </div>
+    <script type="module" src="./harness.ts"></script>
+  </body>
+</html>

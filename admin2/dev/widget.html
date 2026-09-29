@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redirect Manager: widget harness</title>
+    <style>
+      .grid { display: grid; gap: 1rem; padding: 1.5rem; grid-template-columns: repeat(4, 1fr); align-items: stretch; }
+      .grid > [data-size='sm'] { grid-column: span 1; }
+      .grid > [data-size='md'] { grid-column: span 2; }
+      .grid > [data-size='lg'] { grid-column: span 4; }
+      .grid > div { min-height: 8rem; }
+      @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .grid > div { grid-column: auto !important; } }
+    </style>
+  </head>
+  <body data-harness="widget">
+    <div id="devbar" class="devbar"></div>
+    <div class="grid">
+      <div data-size="sm"></div>
+      <div data-size="md"></div>
+      <div data-size="lg"></div>
+    </div>
+    <script type="module" src="./harness.ts"></script>
+  </body>
+</html>

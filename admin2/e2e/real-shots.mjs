@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 const out = join(root, '..', 'docs', 'screenshots');
 mkdirSync(out, { recursive: true });
 const only = process.argv.slice(2);
-const SAMPLES = process.env.RM_SAMPLES || '/private/tmp/claude-501/-Users-nicooo-App-Entwicklung-Grav2-Plugins/30bdd885-afc6-492e-88dc-76e490e9e12e/scratchpad/samples';
+const SAMPLES = process.env.RM_SAMPLES || new URL('./samples', import.meta.url).pathname;
 
 const api = await apiClient();
 // a rule with a chain and a conflict shows the editor's checks at their most useful

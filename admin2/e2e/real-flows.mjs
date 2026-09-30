@@ -466,7 +466,7 @@ if (want('tester')) {
   });
 }
 
-const SAMPLES = process.env.RM_SAMPLES || '/private/tmp/claude-501/-Users-nicooo-App-Entwicklung-Grav2-Plugins/30bdd885-afc6-492e-88dc-76e490e9e12e/scratchpad/samples';
+const SAMPLES = process.env.RM_SAMPLES || new URL('./samples', import.meta.url).pathname;
 
 /* ---------------------------------------------------------------- import */
 /** a fresh import view: leaving the tab and coming back resets the finished-import state */

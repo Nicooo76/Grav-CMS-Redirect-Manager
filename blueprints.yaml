@@ -8,10 +8,10 @@ author:
   name: PixAgentur
   email: info@pixagentur.com
   url: https://pixagentur.com
-homepage: https://github.com/Nicooo76/grav-plugin-redirect-manager
+homepage: https://github.com/Nicooo76/Grav-CMS-Redirect-Manager
 keywords: redirect, redirects, 301, 404, seo, migration, htaccess, nginx
-bugs: https://github.com/Nicooo76/grav-plugin-redirect-manager/issues
-docs: https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/README.md
+bugs: https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/issues
+docs: https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/README.md
 license: MIT
 
 compatibility:

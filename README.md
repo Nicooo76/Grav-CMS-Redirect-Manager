@@ -34,22 +34,22 @@ Admin 2 shows the plugin as one page with six tabs: Rules, 404 monitor, Suggesti
 
 | Light | Dark |
 |---|---|
-| <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/rules-light.png" alt="Rules tab in the light theme with pending decisions, new automatic redirects and the rule table" width="440"> | <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/rules-dark.png" alt="Rules tab in the dark theme" width="440"> |
+| <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/rules-light.png" alt="Rules tab in the light theme with pending decisions, new automatic redirects and the rule table" width="440"> | <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/rules-dark.png" alt="Rules tab in the dark theme" width="440"> |
 
 <details>
 <summary>More screens: editor, 404 monitor, suggestions, tester, import, export, settings, dashboard widget, page editor panel</summary>
 
 | Light | Dark |
 |---|---|
-| <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/editor-light.png" alt="Rule editor with a live URL test, a conflict warning and a chain warning" width="440"> | <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/editor-dark.png" alt="Rule editor in the dark theme" width="440"> |
-| <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/404-light.png" alt="404 monitor with a chart of hits per day and the most requested missing paths" width="440"> | <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/404-dark.png" alt="404 monitor in the dark theme" width="440"> |
-| <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/suggestions-light.png" alt="Suggestions with scores, reasons and a bulk accept slider" width="440"> | <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/suggestions-dark.png" alt="Suggestions in the dark theme" width="440"> |
-| <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/tester-light.png" alt="URL tester showing a two-hop redirect chain" width="440"> | <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/tester-dark.png" alt="URL tester in the dark theme" width="440"> |
-| <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/import-light.png" alt="CSV import with column mapping and a preview" width="440"> | <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/import-dark.png" alt="Import in the dark theme" width="440"> |
-| <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/export-light.png" alt="Export cards for CSV, JSON, YAML, htaccess, nginx, Cloudflare, Netlify, site.yaml and WordPress" width="440"> | <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/export-dark.png" alt="Export in the dark theme" width="440"> |
-| <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/settings-light.png" alt="Settings tab with the Redirects section" width="440"> | <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/settings-dark.png" alt="Settings in the dark theme" width="440"> |
-| <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/dashboard-widget-light.png" alt="Admin 2 dashboard with the Redirects overview widget" width="440"> | <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/dashboard-widget-dark.png" alt="Dashboard widget in the dark theme" width="440"> |
-| <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/page-panel-light.png" alt="Admin 2 page editor with the Redirects panel open: a new automatic redirect, the redirects to this page, old URLs with 404s and the form to add an old URL" width="440"> | <img src="https://github.com/Nicooo76/grav-plugin-redirect-manager/raw/main/docs/screenshots/page-panel-dark.png" alt="Page editor panel in the dark theme" width="440"> |
+| <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/editor-light.png" alt="Rule editor with a live URL test, a conflict warning and a chain warning" width="440"> | <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/editor-dark.png" alt="Rule editor in the dark theme" width="440"> |
+| <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/404-light.png" alt="404 monitor with a chart of hits per day and the most requested missing paths" width="440"> | <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/404-dark.png" alt="404 monitor in the dark theme" width="440"> |
+| <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/suggestions-light.png" alt="Suggestions with scores, reasons and a bulk accept slider" width="440"> | <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/suggestions-dark.png" alt="Suggestions in the dark theme" width="440"> |
+| <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/tester-light.png" alt="URL tester showing a two-hop redirect chain" width="440"> | <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/tester-dark.png" alt="URL tester in the dark theme" width="440"> |
+| <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/import-light.png" alt="CSV import with column mapping and a preview" width="440"> | <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/import-dark.png" alt="Import in the dark theme" width="440"> |
+| <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/export-light.png" alt="Export cards for CSV, JSON, YAML, htaccess, nginx, Cloudflare, Netlify, site.yaml and WordPress" width="440"> | <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/export-dark.png" alt="Export in the dark theme" width="440"> |
+| <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/settings-light.png" alt="Settings tab with the Redirects section" width="440"> | <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/settings-dark.png" alt="Settings in the dark theme" width="440"> |
+| <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/dashboard-widget-light.png" alt="Admin 2 dashboard with the Redirects overview widget" width="440"> | <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/dashboard-widget-dark.png" alt="Dashboard widget in the dark theme" width="440"> |
+| <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/page-panel-light.png" alt="Admin 2 page editor with the Redirects panel open: a new automatic redirect, the redirects to this page, old URLs with 404s and the form to add an old URL" width="440"> | <img src="https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/raw/main/docs/screenshots/page-panel-dark.png" alt="Page editor panel in the dark theme" width="440"> |
 
 </details>
 
@@ -135,10 +135,10 @@ Use one of three ways.
 
 **GPM.** `bin/gpm install redirect-manager` works once the plugin is listed in the GPM repository. It is not listed yet, so use one of the next two ways until then.
 
-**GPM direct install.** Take the ZIP from the [GitHub releases](https://github.com/Nicooo76/grav-plugin-redirect-manager/releases):
+**GPM direct install.** Take the ZIP from the [GitHub releases](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/releases):
 
 ```bash
-bin/gpm direct-install https://github.com/Nicooo76/grav-plugin-redirect-manager/releases/download/v1.0.0/grav-plugin-redirect-manager-1.0.0.zip -y
+bin/gpm direct-install https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/releases/download/v1.0.0/grav-plugin-redirect-manager-1.0.0.zip -y
 ```
 
 A downloaded ZIP works too: `bin/gpm direct-install grav-plugin-redirect-manager-1.0.0.zip -y`. The plugin lands in `user/plugins/redirect-manager`.
@@ -344,7 +344,7 @@ Rules are ranked by `priority`, highest first. On equal priority: exact, then wi
 
 ## Import and export
 
-Admin 2: Redirects, Import / Export. CLI: `import` and `export`. REST: `/redirects/import/*` and `/redirects/export`. The full guide with every deviation is in [docs/IMPORT-FORMATS.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/IMPORT-FORMATS.md).
+Admin 2: Redirects, Import / Export. CLI: `import` and `export`. REST: `/redirects/import/*` and `/redirects/export`. The full guide with every deviation is in [docs/IMPORT-FORMATS.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/IMPORT-FORMATS.md).
 
 An import shows a preview first. It validates every row like a manual rule, skips duplicates by default and refuses the whole file if one row is invalid, unless you choose to skip invalid rows.
 
@@ -382,7 +382,7 @@ Then:
 
 ## CLI reference
 
-Run commands as `bin/plugin redirect-manager <command>`. Every command also has the alias `redirects:<command>`, for example `redirects:add`. The command that lists rules is named `rules`, with the alias `redirects:list`. A command called `list` would take the place of Symfony's built-in `list`, the command overview of `bin/plugin redirect-manager` ([why](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/DECISIONS.md#d-026-the-list-command-is-rules-with-the-alias-redirectslist)). `--help` prints the options of a command.
+Run commands as `bin/plugin redirect-manager <command>`. Every command also has the alias `redirects:<command>`, for example `redirects:add`. The command that lists rules is named `rules`, with the alias `redirects:list`. A command called `list` would take the place of Symfony's built-in `list`, the command overview of `bin/plugin redirect-manager` ([why](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/DECISIONS.md#d-026-the-list-command-is-rules-with-the-alias-redirectslist)). `--help` prints the options of a command.
 
 Options that come from the command line are validated. A bad value gives exit code 2 and a message on stderr, never a PHP error. With `--json` the only thing on stdout is one JSON document.
 
@@ -473,7 +473,7 @@ curl -s -X POST https://example.org/api/v1/redirects/rules \
 
 Add `?dry_run=1` to validate without saving. Errors follow RFC 7807. Validation errors are 422 with a list of field errors. Chains and conflicts come back as warnings in the rule's `issues`. Other codes: 401, 403, 404, 409 (a changed or already decided record, `If-Match` mismatch), 413 (import too large), 429 (link checks too close together, with `Retry-After`).
 
-Every route with its parameters and responses is in [docs/API.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/API.md) and [docs/openapi.yaml](docs/openapi.yaml). The OpenAPI file is part of the release ZIP.
+Every route with its parameters and responses is in [docs/API.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/API.md) and [docs/openapi.yaml](docs/openapi.yaml). The OpenAPI file is part of the release ZIP.
 
 ## MCP tools
 
@@ -710,9 +710,9 @@ scripts/setup-test-site.sh            # once, downloads Grav 2.2.2
 scripts/benchmark-request.sh          # 10,000 rules, 2,000 requests, about 40 seconds
 ```
 
-The result goes to `build/benchmark-request.md` and `build/benchmark-request.json`. Options such as `--rules 20000` and `--port` are described in [docs/PERFORMANCE.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/PERFORMANCE.md). To measure your own site, set `debug_timing: true` or `REDIRECT_MANAGER_TIMING=1` and read the `X-Redirect-Manager-Time` header.
+The result goes to `build/benchmark-request.md` and `build/benchmark-request.json`. Options such as `--rules 20000` and `--port` are described in [docs/PERFORMANCE.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/PERFORMANCE.md). To measure your own site, set `debug_timing: true` or `REDIRECT_MANAGER_TIMING=1` and read the `X-Redirect-Manager-Time` header.
 
-**Admin screens.** With 10,000 rules, 50,000 log entries of 404s and 5,000 suggestions, the rule list (a page of 50) answers in about 0.15 s, the dashboard in 0.18 s, the 404 monitor in 0.12 to 0.17 s and the suggestions in 0.15 s. That is the wall-clock time of a whole API request on the machine above, including Grav's boot. `tests/Integration/ApiPerformanceTest.php` fails above 200 ms for the rule list and 300 ms for the others. The first list after a change to `rules.yaml` also computes the analysis of all rules and takes about 0.6 s. Details: [docs/PERFORMANCE.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/PERFORMANCE.md).
+**Admin screens.** With 10,000 rules, 50,000 log entries of 404s and 5,000 suggestions, the rule list (a page of 50) answers in about 0.15 s, the dashboard in 0.18 s, the 404 monitor in 0.12 to 0.17 s and the suggestions in 0.15 s. That is the wall-clock time of a whole API request on the machine above, including Grav's boot. `tests/Integration/ApiPerformanceTest.php` fails above 200 ms for the rule list and 300 ms for the others. The first list after a change to `rules.yaml` also computes the analysis of all rules and takes about 0.6 s. Details: [docs/PERFORMANCE.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/PERFORMANCE.md).
 
 ## Security
 
@@ -730,7 +730,7 @@ Report a vulnerability by mail to info@pixagentur.com instead of opening a publi
 
 ## Known limits
 
-Each entry says what is limited, why, and what to do instead. The reasons are recorded in [docs/DECISIONS.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/DECISIONS.md), and every requirement that could not be met as written is listed with its Grav or Admin 2 source in [docs/FEATURE-CHECKLIST.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/FEATURE-CHECKLIST.md).
+Each entry says what is limited, why, and what to do instead. The reasons are recorded in [docs/DECISIONS.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/DECISIONS.md), and every requirement that could not be met as written is listed with its Grav or Admin 2 source in [docs/FEATURE-CHECKLIST.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/FEATURE-CHECKLIST.md).
 
 **Admin 2 and the API plugin**
 
@@ -824,7 +824,7 @@ composer test        # php-cs-fixer (dry run), PHPStan level 8, unit tests
 composer test:all    # the above plus the integration suite
 ```
 
-The integration suite needs a Grav test site. `scripts/setup-test-site.sh` downloads Grav 2.2.2 into `.grav/` once. Then run `RM_PORT_RANGE=8300-8399 vendor/bin/phpunit --testsuite integration`. The suites, environment variables and coverage are in [docs/TESTING.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/TESTING.md).
+The integration suite needs a Grav test site. `scripts/setup-test-site.sh` downloads Grav 2.2.2 into `.grav/` once. Then run `RM_PORT_RANGE=8300-8399 vendor/bin/phpunit --testsuite integration`. The suites, environment variables and coverage are in [docs/TESTING.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/TESTING.md).
 
 The Admin 2 interface is Svelte 5 with Vite in `admin2/`. It builds to two files in `admin-next/`, which are committed:
 
@@ -838,11 +838,11 @@ npm run build    # writes admin-next/ and the generated UI strings in ../languag
 
 Commit the build output with your change. CI rebuilds it and fails on any difference. UI text lives in `admin2/src/i18n/{en,de}/`, the rest of the language file is hand-written. German uses "Sie".
 
-The browser tests are Playwright specs in `tests/ui/`. CI runs them in the `playwright` job, see [docs/RELEASING.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/RELEASING.md).
+The browser tests are Playwright specs in `tests/ui/`. CI runs them in the `playwright` job, see [docs/RELEASING.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/RELEASING.md).
 
-Code is PHP 8.3 syntax with `declare(strict_types=1)`, PSR-12 and PHPStan level 8. [docs/ARCHITECTURE.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/ARCHITECTURE.md) is the contract between the parts, [docs/DECISIONS.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/DECISIONS.md) explains the choices, and [docs/GRAV2-NOTES.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/GRAV2-NOTES.md) holds what was verified about Grav 2.
+Code is PHP 8.3 syntax with `declare(strict_types=1)`, PSR-12 and PHPStan level 8. [docs/ARCHITECTURE.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/ARCHITECTURE.md) is the contract between the parts, [docs/DECISIONS.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/DECISIONS.md) explains the choices, and [docs/GRAV2-NOTES.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/GRAV2-NOTES.md) holds what was verified about Grav 2.
 
-**Releasing.** A release is a tag `vX.Y.Z` on a commit whose `blueprints.yaml` says `version: X.Y.Z`. `scripts/build-release.sh <version>` builds the ZIP and `scripts/test-release.sh` installs it into a clean Grav, exercises it and uninstalls it again. The full process is in [docs/RELEASING.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/RELEASING.md).
+**Releasing.** A release is a tag `vX.Y.Z` on a commit whose `blueprints.yaml` says `version: X.Y.Z`. `scripts/build-release.sh <version>` builds the ZIP and `scripts/test-release.sh` installs it into a clean Grav, exercises it and uninstalls it again. The full process is in [docs/RELEASING.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/RELEASING.md).
 
 ## License
 
@@ -856,7 +856,7 @@ Redirect Manager leitet Besucher von alten auf neue URLs um und zeigt, welche al
 
 **Voraussetzungen.** Grav 2.1.5 oder neuer (getestet auf 2.2.2) und PHP 8.3 oder neuer. Das API-Plugin und Admin 2 sind optional, aber für Oberfläche, REST-API, MCP und automatische Weiterleitungen nötig. Ohne sie laufen die Weiterleitungen, das 404-Protokoll, Twig und die Kommandozeile weiter. Damit Wartung, Linkprüfung und Bericht laufen, muss der Grav-Scheduler aktiv sein.
 
-**Installation.** `bin/gpm install redirect-manager` klappt, sobald das Plugin im GPM-Verzeichnis gelistet ist. Bis dahin laden Sie die ZIP-Datei von den [GitHub-Releases](https://github.com/Nicooo76/grav-plugin-redirect-manager/releases) und installieren sie mit `bin/gpm direct-install grav-plugin-redirect-manager-1.0.0.zip -y`. Alternativ entpacken Sie die ZIP-Datei nach `user/plugins/` und leeren den Cache mit `bin/grav clearcache`. Der Ordner muss `redirect-manager` heißen. Die Deinstallation mit `bin/gpm uninstall redirect-manager` lässt Ihre Daten stehen: `user/data/redirect-manager/` und `user/config/plugins/redirect-manager.yaml`. Löschen Sie den Datenordner selbst, wenn er weg soll.
+**Installation.** `bin/gpm install redirect-manager` klappt, sobald das Plugin im GPM-Verzeichnis gelistet ist. Bis dahin laden Sie die ZIP-Datei von den [GitHub-Releases](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/releases) und installieren sie mit `bin/gpm direct-install grav-plugin-redirect-manager-1.0.0.zip -y`. Alternativ entpacken Sie die ZIP-Datei nach `user/plugins/` und leeren den Cache mit `bin/grav clearcache`. Der Ordner muss `redirect-manager` heißen. Die Deinstallation mit `bin/gpm uninstall redirect-manager` lässt Ihre Daten stehen: `user/data/redirect-manager/` und `user/config/plugins/redirect-manager.yaml`. Löschen Sie den Datenordner selbst, wenn er weg soll.
 
 **Erste Schritte.**
 
@@ -866,7 +866,7 @@ Redirect Manager leitet Besucher von alten auf neue URLs um und zeigt, welche al
 4. Lassen Sie den 404-Monitor einige Tage sammeln. Erzeugen Sie dann unter Suggestions Vorschläge und übernehmen Sie die guten. Vorschläge ab Score 0,9 lassen sich gesammelt übernehmen, mit Vorschau.
 5. Sorgen Sie dafür, dass der Grav-Scheduler läuft. Er räumt das Protokoll auf, zählt die Treffer zusammen und prüft die Weiterleitungsziele.
 
-**Relaunch von einer alten Seite.** Importieren Sie die alte `.htaccess` oder nginx-Konfiguration und die Weiterleitungen aus `site.yaml`. Laden Sie danach die alte `sitemap.xml` unter Import / Export hoch. Sie erhalten alle URLs, für die es weder eine Seite noch eine Regel gibt, jede davon als Vorschlag. Die Details stehen im englischen Abschnitt [Migrating from Grav 1.7](#migrating-from-grav-17) und in [docs/IMPORT-FORMATS.md](https://github.com/Nicooo76/grav-plugin-redirect-manager/blob/main/docs/IMPORT-FORMATS.md).
+**Relaunch von einer alten Seite.** Importieren Sie die alte `.htaccess` oder nginx-Konfiguration und die Weiterleitungen aus `site.yaml`. Laden Sie danach die alte `sitemap.xml` unter Import / Export hoch. Sie erhalten alle URLs, für die es weder eine Seite noch eine Regel gibt, jede davon als Vorschlag. Die Details stehen im englischen Abschnitt [Migrating from Grav 1.7](#migrating-from-grav-17) und in [docs/IMPORT-FORMATS.md](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/blob/main/docs/IMPORT-FORMATS.md).
 
 **Datenschutz im Detail.**
 

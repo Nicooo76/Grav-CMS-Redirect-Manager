@@ -107,7 +107,7 @@ en:
       NOTIFY_DEAD_TARGETS_HELP: 'Sends the dead_target webhook when a scheduled link check finds a target newly dead. Each target is reported once, and again if it recovers and dies again. Needs a webhook URL. The report mail lists dead targets either way.'
       EMAIL_DIGEST: Report mail
       EMAIL_DIGEST_HELP: 'Sends a summary to the address below: top 404 paths and new 404 paths (bots left out), redirect hits, most used rules, open suggestions and dead targets. Daily at 07:00 or weekly on Mondays at 07:00. Needs the Grav email plugin with a working mailer, and the Grav scheduler.'
-      EMAIL_DIGEST_NONE: Off
+      EMAIL_DIGEST_NONE: "Off"
       EMAIL_DIGEST_DAILY: Daily
       EMAIL_DIGEST_WEEKLY: Weekly
       EMAIL_TO: Report recipient
@@ -299,7 +299,7 @@ en:
         MORE_ACTIONS: "More actions"
         NEVER: "Never"
         NEXT: "Next page"
-        NO: "No"
+        "NO": "No"
         NONE: "None"
         NOTIFICATIONS: "Notifications"
         NO_RESULTS: "No results"
@@ -321,7 +321,7 @@ en:
         UNDO: "Undo"
         USE_TYPED: "Use “{value}”"
         VIEW: "View"
-        YES: "Yes"
+        "YES": "Yes"
       EDITOR:
         ACTIVE_FROM: "Active from"
         ACTIVE_FROM_HELP: "The rule starts at this time. Empty means right away."
@@ -1365,7 +1365,7 @@ de:
         MORE_ACTIONS: "Weitere Aktionen"
         NEVER: "Nie"
         NEXT: "Nächste Seite"
-        NO: "Nein"
+        "NO": "Nein"
         NONE: "Keine"
         NOTIFICATIONS: "Benachrichtigungen"
         NO_RESULTS: "Keine Treffer"
@@ -1387,7 +1387,7 @@ de:
         UNDO: "Rückgängig"
         USE_TYPED: "„{value}“ verwenden"
         VIEW: "Ansehen"
-        YES: "Ja"
+        "YES": "Ja"
       EDITOR:
         ACTIVE_FROM: "Aktiv ab"
         ACTIVE_FROM_HELP: "Die Regel startet zu diesem Zeitpunkt. Leer: sofort."

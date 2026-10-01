@@ -35,6 +35,9 @@ final class StatsStore
 {
     public const ID_PATTERN = '/^[A-Za-z0-9._:-]{1,128}$/';
 
+    /** The permission bit (owner execute) the aggregator sets on a renamed hit file to seal it, see seal(). */
+    public const SEAL_BIT = 0o100;
+
     /** Seconds a stats.json must be old before all() keeps its decoded content (see all()). */
     private const MEMO_AFTER = 2;
 
@@ -281,6 +284,22 @@ final class StatsStore
     }
 
     /**
+     * Closes a renamed hit file to writers that still hold a handle on it: sets the owner's execute bit, which a
+     * hit log never has. Called with the file's lock held, before the lines are read, so a writer that gets the lock
+     * later sees the bit through its handle and starts over with the live file (HitRecorder::record()). Nothing else
+     * about the file changes (a write permission would make a stale path lookup fail to open it instead), so an
+     * aggregation that crashed halfway finds it intact. Without the right to chmod (the aggregator runs as another
+     * user than the writers) the path check of the writers has to do.
+     */
+    private static function seal(string $file): void
+    {
+        $mode = @fileperms($file);
+        if ($mode !== false) {
+            @chmod($file, ($mode & 0o7777) | self::SEAL_BIT);
+        }
+    }
+
+    /**
      * Hit counts per rule id in a renamed hit file. Takes the file lock first so that a recorder that
      * opened the file before the rename has finished writing. Invalid lines are ignored.
      *
@@ -293,6 +312,7 @@ final class StatsStore
             return null;
         }
         flock($handle, LOCK_EX);
+        self::seal($file);
         $counts = [];
         while (($line = fgets($handle, 4096)) !== false) {
             $id = rtrim($line, "\r\n");

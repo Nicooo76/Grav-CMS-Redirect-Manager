@@ -26,6 +26,8 @@ The `release` workflow then:
 
 ## What CI runs on every push and pull request
 
+All jobs, and the `release` workflow, run on `ubuntu-24.04` (pinned, not `ubuntu-latest`, which becomes Ubuntu 26 on 2026-10-19; see docs/TESTING.md, "CI"). The actions are `actions/checkout@v7`, `actions/cache@v6`, `actions/setup-node@v7`, `actions/upload-artifact@v7` and `softprops/action-gh-release@v3`, all of which run on Node 24.
+
 | Job | Content |
 |---|---|
 | `php` (8.3, 8.4, 8.5) | `composer validate --strict`, `composer cs`, `scripts/setup-test-site.sh`, `composer stan`, unit tests (`composer coverage` with pcov on 8.3: fails below 90 %), integration suite with `RM_PHP_BIN` set. The `.grav` test site is cached by Grav version and setup script hash. |

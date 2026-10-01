@@ -45,6 +45,15 @@ function nest(flat) {
   return tree;
 }
 
+/**
+ * Words the YAML 1.1 core schema reads as booleans or null. Grav parses languages.yaml with the libyaml extension when
+ * the server has it (Grav\\Framework\\File\\Formatter\\YamlFormatter), and libyaml follows YAML 1.1: a bare key
+ * `YES:` becomes the key 1, `NO:` becomes 0, and COMMON.YES / COMMON.NO vanish from the dictionary (the host then
+ * serves the English backfill on a German page). Symfony's parser, the fallback, does not do that, so a test site
+ * without libyaml never shows it. Such keys are written quoted.
+ */
+const YAML11_WORDS = /^(y|n|yes|no|true|false|on|off|null|~)$/i;
+
 const en = loadDir('en');
 const de = loadDir('de');
 const missing = Object.keys(en).filter((k) => !(k in de));
@@ -62,7 +71,12 @@ const file = join(root, '..', 'languages.yaml');
 const doc = YAML.parseDocument(readFileSync(file, 'utf8'));
 for (const [lang, flat] of [['en', en], ['de', de]]) {
   const node = doc.createNode(nest(flat));
-  YAML.visit(node, { Scalar(key, sc) { if (key !== 'key' && typeof sc.value === 'string') sc.type = 'QUOTE_DOUBLE'; } });
+  YAML.visit(node, {
+    Scalar(key, sc) {
+      if (typeof sc.value !== 'string') return;
+      if (key !== 'key' || YAML11_WORDS.test(sc.value)) sc.type = 'QUOTE_DOUBLE';
+    },
+  });
   const plugin = doc.getIn([lang, 'PLUGIN_REDIRECT_MANAGER']);
   if (!YAML.isMap(plugin)) throw new Error(`languages.yaml has no ${lang}.PLUGIN_REDIRECT_MANAGER map`);
   plugin.delete('UI');

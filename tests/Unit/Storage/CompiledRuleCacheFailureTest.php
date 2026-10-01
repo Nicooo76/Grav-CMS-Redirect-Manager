@@ -14,6 +14,7 @@ use Grav\Plugin\RedirectManager\Matching\RuleCompiler;
 use Grav\Plugin\RedirectManager\Storage\CompiledRuleCache;
 use Grav\Plugin\RedirectManager\Storage\RuleRepository;
 use Grav\Plugin\RedirectManager\Tests\Unit\NotFound\Support\TempDirTrait;
+use Grav\Plugin\RedirectManager\Tests\Unit\Support\ChildPhp;
 use Grav\Plugin\RedirectManager\Util\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -250,7 +251,7 @@ copy($readyFile, $cacheFile);
 flock($handle, LOCK_UN);
 fclose($handle);
 PHP);
-        $process = proc_open([PHP_BINARY, $script, $lockFile, $probe->cacheFile(), $readyFile], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $process = proc_open(ChildPhp::command($script, $lockFile, $probe->cacheFile(), $readyFile), [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
         self::assertIsResource($process);
 
         try {

@@ -43,7 +43,7 @@
   const reorderable = $derived(canReorder(rules.list) && can.manage);
   const total = $derived(rule.stats?.total ?? 0);
   const noTarget = $derived(rule.status === 410 || rule.status === 451);
-  const STATUS_OPTIONS = [301, 302, 307, 308, 410, 451, 200].map((v) => ({ value: String(v), label: `${v} · ${t(`STATUS.${v}`)}` }));
+  const STATUS_OPTIONS = $derived([301, 302, 307, 308, 410, 451, 200].map((v) => ({ value: String(v), label: `${v} · ${t(`STATUS.${v}`)}` })));
 
   function startEdit(field: Editing) {
     if (!can.manage) return;

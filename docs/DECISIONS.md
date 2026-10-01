@@ -28,7 +28,7 @@ These need Twig (410/451 templates) or the page tree (pass-through). The match r
 
 ## D-007: Hit counts are append-only logs, aggregated later
 
-Writing `rules.yaml` or `stats.json` on every hit would cause lock contention and Git noise. Each hit appends one line to `hits/YYYY-MM-DD.log`. Aggregation (scheduler, admin API, CLI) renames the file first, so concurrent appends go to a new file, and folds it into `stats.json` with daily buckets for 90 days.
+Writing `rules.yaml` or `stats.json` on every hit would cause lock contention and Git noise. Each hit appends one line to `hits/YYYY-MM-DD.log`. Aggregation (scheduler, admin API, CLI) renames the file first, so concurrent appends go to a new file, and folds it into `stats.json` with daily buckets for 90 days. A writer that still holds the renamed file must not append to it after it was read, so the aggregator seals the file (owner execute bit) under its lock before reading, and a writer starts over when its locked handle is sealed or the path no longer points at it; the path check alone lost 5 to 15 of 4,000 hits in a stress test on macOS.
 
 ## D-008: Priority semantics
 

@@ -8,6 +8,7 @@ use Grav\Plugin\RedirectManager\Storage\AtomicFile;
 use Grav\Plugin\RedirectManager\Storage\AtomicFileException;
 use Grav\Plugin\RedirectManager\Storage\LockTimeoutException;
 use Grav\Plugin\RedirectManager\Tests\Unit\NotFound\Support\TempDirTrait;
+use Grav\Plugin\RedirectManager\Tests\Unit\Support\ChildPhp;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
@@ -264,7 +265,7 @@ final class AtomicFileTest extends TestCase
         $procs = [];
         for ($i = 0; $i < 6; $i++) {
             $procs[] = proc_open(
-                [PHP_BINARY, '-r', $code, '--', $root, $counter, $lock],
+                ChildPhp::command('-r', $code, '--', $root, $counter, $lock),
                 [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
                 $pipes,
             );

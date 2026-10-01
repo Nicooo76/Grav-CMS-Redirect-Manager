@@ -33,7 +33,10 @@
   let testedUrl = $state('');
   let rule = $state<Rule | null>(null);
   let ruleLoading = $state(false);
-  let announcement = $state('');
+  // What the live region says: kept as key and numbers, not as text, so it follows the language when the dictionary
+  // arrives after the result (a deep link tests on mount, before the host has loaded the German texts).
+  let announced = $state<{ key: string; status: number | null; url: string } | null>(null);
+  const announcement = $derived(announced ? `${t(announced.key, { status: announced.status ?? '' })}. ${announced.url}` : '');
 
   let lastRun = '';
   let ctl: AbortController | null = null;
@@ -96,7 +99,7 @@
       if (ctl !== mine) return;
       resp = data;
       const o = summarize(data);
-      announcement = `${t(o.headlineKey, { status: o.status ?? '' })}. ${o.finalUrl}`;
+      announced = { key: o.headlineKey, status: o.status, url: o.finalUrl };
       void loadRule(data.result?.rule_id ?? null, mine);
     } catch (e) {
       if (isAbort(e) || ctl !== mine) return;

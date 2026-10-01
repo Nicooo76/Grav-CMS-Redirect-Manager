@@ -14,6 +14,7 @@ use Grav\Plugin\RedirectManager\Storage\CorruptRulesFileException;
 use Grav\Plugin\RedirectManager\Storage\DuplicateRuleIdException;
 use Grav\Plugin\RedirectManager\Storage\RuleRepository;
 use Grav\Plugin\RedirectManager\Tests\Unit\NotFound\Support\TempDirTrait;
+use Grav\Plugin\RedirectManager\Tests\Unit\Support\ChildPhp;
 use Grav\Plugin\RedirectManager\Util\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -225,7 +226,7 @@ final class RuleRepositoryTest extends TestCase
         $procs = [];
         foreach ([0, 1, 2] as $worker) {
             $proc = proc_open(
-                [PHP_BINARY, $script, $dir, (string) $worker, '25', $goFile],
+                ChildPhp::command($script, $dir, (string) $worker, '25', $goFile),
                 [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', $this->tmp . '/err-' . $worker, 'w']],
                 $pipes,
             );
@@ -235,7 +236,7 @@ final class RuleRepositoryTest extends TestCase
         touch($goFile);
         foreach ($procs as $worker => $proc) {
             proc_close($proc);
-            self::assertSame('', (string) file_get_contents($this->tmp . '/err-' . $worker), 'worker ' . $worker . ' failed');
+            self::assertSame('', ChildPhp::stderr((string) file_get_contents($this->tmp . '/err-' . $worker)), 'worker ' . $worker . ' failed');
         }
 
         $ids = array_map(static fn (Rule $r): string => $r->id, $this->repo->all());

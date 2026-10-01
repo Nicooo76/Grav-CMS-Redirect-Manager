@@ -91,7 +91,7 @@ Rules for new tests: no `waitForTimeout`, arrange state through the API, verify 
       npx playwright test --grep @visual --update-snapshots && npx playwright test --grep @visual'
   ```
 
-  Look at the 14 PNGs in `specs/__screenshots__/linux/visual.spec.ts/` before committing, and run the CI workflow once to see that the runner's fonts give the same pixels (fallback glyphs such as arrows and quotes can differ between the image and `ubuntu-latest`).
+  Look at the 14 PNGs in `specs/__screenshots__/linux/visual.spec.ts/` before committing, and run the CI workflow once to see that the runner's fonts give the same pixels (fallback glyphs such as arrows and quotes can differ between the image and `ubuntu-24.04`).
 - Baselines change whenever the UI changes on purpose. Regenerate them in the same commit as the UI change.
 
 ## Accessibility (`a11y.spec.ts`)

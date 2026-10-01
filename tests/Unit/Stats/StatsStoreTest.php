@@ -10,6 +10,7 @@ use Grav\Plugin\RedirectManager\Stats\RuleStats;
 use Grav\Plugin\RedirectManager\Stats\StatsStore;
 use Grav\Plugin\RedirectManager\Tests\Unit\NotFound\Support\TempDirTrait;
 use Grav\Plugin\RedirectManager\Tests\Unit\NotFound\Support\WorkerRunner;
+use Grav\Plugin\RedirectManager\Tests\Unit\Support\ChildPhp;
 use Grav\Plugin\RedirectManager\Util\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -529,7 +530,7 @@ final class StatsStoreTest extends TestCase
         $procs = [];
         for ($i = 0; $i < 4; $i++) {
             $procs[] = proc_open(
-                [PHP_BINARY, '-r', $code, '--', dirname(__DIR__, 3), $this->statsFile, $this->hitsDir],
+                ChildPhp::command('-r', $code, '--', dirname(__DIR__, 3), $this->statsFile, $this->hitsDir),
                 [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
                 $pipes,
             );

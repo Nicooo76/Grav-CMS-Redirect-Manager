@@ -12,7 +12,8 @@ import type { App } from '../support/app';
  * English fallback and no humanized key shows up anywhere (the whole shadow DOM text and its accessible attributes).
  */
 
-const { de } = uiDictionaries();
+const { en, de } = uiDictionaries();
+const UI_PREFIX = 'PLUGIN_REDIRECT_MANAGER.UI.';
 const DE_TABS = ['Regeln', '404-Monitor', 'Vorschläge', 'Tester', 'Import / Export', 'Einstellungen'];
 
 test.describe('German UI', () => {
@@ -37,6 +38,45 @@ test.describe('German UI', () => {
     expect(leaks.rawKeys).toHaveLength(2);
     expect(leaks.english.map((l) => l.split('  ')[0])).toEqual(['Search redirects', '3 open suggestions']);
     expect(leaks.humanized.map((l) => l.split('  ')[0])).toEqual(['Filter Match']);
+  });
+
+  /**
+   * What the server hands the browser, not what the page makes of it. Grav reads languages.yaml with the libyaml
+   * extension when the server has it, and libyaml reads a bare `YES:` or `NO:` key as a boolean: COMMON.YES then
+   * vanished from the German dictionary and the page showed the English backfill (CI, where the extension is loaded,
+   * failed on "Yes" in the tester trace; a server without it never shows it). Whichever PHP runs the site, the
+   * dictionary has to be the file.
+   */
+  for (const [lang, code, expected] of [['English', 'en-US', en], ['German', 'de-DE', de]] as const) {
+    test(`the server's ${lang} dictionary carries every UI string of languages.yaml`, async ({ site }) => {
+      const res = await fetch(`${site.baseUrl}/api/v1/translations/${code}`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { strings?: Record<string, string>; data?: { strings?: Record<string, string> } };
+      const strings = body.strings ?? body.data?.strings ?? {};
+      const served = Object.fromEntries(Object.entries(strings).filter(([k]) => k.startsWith(UI_PREFIX)).map(([k, v]) => [k.slice(UI_PREFIX.length), v]));
+      const missing = Object.keys(expected).filter((k) => !(k in served));
+      expect(missing, 'keys of languages.yaml the server does not serve').toEqual([]);
+      expect(Object.keys(served).filter((k) => !(k in expected)), 'keys the server serves that are not in languages.yaml').toEqual([]);
+      expect(Object.keys(expected).filter((k) => served[k] !== expected[k])).toEqual([]);
+    });
+  }
+
+  test('a dictionary that arrives after the first render turns every text German, the tester result and its live region included', async ({ app, page }) => {
+    await page.route('**/api/v1/translations/**', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.continue();
+    });
+    // a deep link tests on mount: the result is rendered long before the German texts are there
+    await page.goto(`${app.baseUrl}/admin/plugin/redirect-manager#/tester?url=/kette-a`);
+    await expect(app.root).toBeVisible({ timeout: 30_000 });
+    await expect(app.root.locator('table.trace')).toBeVisible();
+    await expect(app.root.getByRole('navigation').first()).toContainText('Rules');
+
+    await expect(app.root.getByRole('navigation').first()).toContainText(de['TAB.RULES'], { timeout: 15_000 });
+    await expect
+      .poll(async () => findLeaks(await shadowTexts(app.root)), { message: 'texts that stayed English or became keys', timeout: 10_000 })
+      .toEqual({ rawKeys: [], english: [], humanized: [] });
+    await expect(app.root.locator('table.trace td .yes')).toHaveText(de['COMMON.YES']);
   });
 
   test('the tab bar and the rules tab are German: toolbar, table header, badges, pagination', async ({ app }) => {

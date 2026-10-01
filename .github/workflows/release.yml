@@ -13,10 +13,10 @@ env:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Tag matches blueprints.yaml
         id: version
@@ -42,11 +42,11 @@ jobs:
         with:
           php-version: "8.3"
           extensions: mbstring, intl, pdo_sqlite, sqlite3, curl, zip, gd, opcache, dom, simplexml, fileinfo
-          ini-values: opcache.enable_cli=1, opcache.jit=off, memory_limit=1G
+          ini-values: opcache.enable_cli=1, opcache.jit=disable, opcache.jit_buffer_size=0, memory_limit=1G
           coverage: none
           tools: composer:v2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -67,7 +67,7 @@ jobs:
         run: scripts/test-release.sh
 
       - name: Create the GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ steps.version.outputs.version }}
           body_path: release-notes.md

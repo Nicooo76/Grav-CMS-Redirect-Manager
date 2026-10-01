@@ -19,6 +19,12 @@ use RuntimeException;
  * to the file at the path and reopens otherwise. That makes aggregation lossless: a writer that holds the
  * lock and passed the check finishes before the aggregator, which locks the renamed file, reads it; a writer
  * that opened the old file but locks it later sees a different file at the path and starts over.
+ *
+ * The path check alone is not enough: the aggregator may be done with the renamed file by the time such a writer
+ * gets the lock, and a lookup of the path can still answer with the old file for a moment (seen on macOS with eight
+ * writers and a looping aggregation: 5 to 15 of 4,000 hits written to a file that was already read and deleted).
+ * So the aggregator also seals the renamed file while it holds the lock, and a writer that finds its handle sealed
+ * starts over, whatever the path says. Sealed means: the owner's execute bit is set, which no hit log has otherwise (see StatsStore::seal()).
  */
 final class HitRecorder
 {
@@ -75,7 +81,7 @@ final class HitRecorder
             clearstatcache(true, $file);
             $onDisk = @stat($file);
             $open = fstat($handle);
-            if ($onDisk === false || $open === false || $onDisk['ino'] !== $open['ino'] || $onDisk['dev'] !== $open['dev']) {
+            if ($onDisk === false || $open === false || $onDisk['ino'] !== $open['ino'] || $onDisk['dev'] !== $open['dev'] || ($open['mode'] & StatsStore::SEAL_BIT) !== 0) {
                 fclose($handle);
                 continue;
             }

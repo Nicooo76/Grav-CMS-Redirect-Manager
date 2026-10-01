@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { createTranslator, formatMessage } from './i18n';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createTranslator, formatMessage, watchDictionary } from './i18n';
 
 const host = (dict: Record<string, string>, locale = 'en') => ({
   t: (key: string) => dict[key] ?? key.split('.').pop()!.toLowerCase(),
@@ -72,5 +72,79 @@ describe('translator', () => {
     expect(called).toBe(1);
     off();
     expect(called).toBe(-1);
+  });
+});
+
+describe('watchDictionary', () => {
+  /** A host like Admin 2's: the dictionary can be replaced without a notification (same language). */
+  function lateHost() {
+    const state = { locale: 'de', dict: {} as Record<string, string> };
+    return { state, host: { t: (k: string) => state.dict[k] ?? k, has: (k: string) => k in state.dict, get locale() { return state.locale; }, dir: 'ltr' as const, subscribe: () => () => {} } };
+  }
+
+  afterEach(() => vi.useRealTimers());
+
+  it('calls back once when the dictionary arrives for the language that is already set', () => {
+    vi.useFakeTimers();
+    const { state, host } = lateHost();
+    const t = createTranslator({ 'COMMON.YES': 'Yes' }, () => host);
+    const changed = vi.fn();
+    watchDictionary(t, changed, { intervalMs: 100, maxMs: 5000 });
+
+    vi.advanceTimersByTime(500);
+    expect(changed).not.toHaveBeenCalled();
+    expect(t.t('COMMON.YES')).toBe('Yes');
+
+    state.dict = { 'PLUGIN_REDIRECT_MANAGER.UI.COMMON.YES': 'Ja' };
+    vi.advanceTimersByTime(100);
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(t.t('COMMON.YES')).toBe('Ja');
+
+    vi.advanceTimersByTime(1000);
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it('notices a language change and a replaced dictionary', () => {
+    vi.useFakeTimers();
+    const { state, host } = lateHost();
+    state.dict = { 'PLUGIN_REDIRECT_MANAGER.UI.COMMON.YES': 'Ja' };
+    const t = createTranslator({}, () => host);
+    const changed = vi.fn();
+    watchDictionary(t, changed, { intervalMs: 100 });
+
+    state.locale = 'fr';
+    vi.advanceTimersByTime(100);
+    state.dict = { 'PLUGIN_REDIRECT_MANAGER.UI.COMMON.YES': 'Oui' };
+    vi.advanceTimersByTime(100);
+    expect(changed).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops after the time limit and when told to', () => {
+    vi.useFakeTimers();
+    const { state, host } = lateHost();
+    const t = createTranslator({}, () => host);
+    const changed = vi.fn();
+    watchDictionary(t, changed, { intervalMs: 100, maxMs: 1000 });
+    vi.advanceTimersByTime(1500);
+    state.dict = { 'PLUGIN_REDIRECT_MANAGER.UI.COMMON.YES': 'Ja' };
+    vi.advanceTimersByTime(1000);
+    expect(changed).not.toHaveBeenCalled();
+
+    const stop = watchDictionary(t, changed, { intervalMs: 100 });
+    stop();
+    state.dict = { 'PLUGIN_REDIRECT_MANAGER.UI.COMMON.YES': 'Nein' };
+    vi.advanceTimersByTime(1000);
+    expect(changed).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('survives having no host at all', () => {
+    vi.useFakeTimers();
+    const t = createTranslator({}, () => undefined);
+    const changed = vi.fn();
+    const stop = watchDictionary(t, changed, { intervalMs: 100 });
+    vi.advanceTimersByTime(1000);
+    expect(changed).not.toHaveBeenCalled();
+    stop();
   });
 });

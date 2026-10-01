@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Grav\Plugin\RedirectManager\Tests\Integration;
 
+use DateTimeImmutable;
 use Grav\Plugin\RedirectManager\Cli\ExitCode;
 use Grav\Plugin\RedirectManager\Tests\Integration\Support\CliRunner;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -299,7 +300,41 @@ final class CliImportExportTest extends IntegrationTestCase
         foreach ($contains as $needle) {
             self::assertStringContainsString($needle, $written, $format . ' in the file');
         }
-        self::assertSame(trim($stdout['stdout']), trim($written), 'stdout and file carry the same export');
+        // Two runs, two clock readings: the WordPress header carries the time of the export, to the second, so the
+        // two calls can straddle a second boundary. Everything else must match to the byte.
+        self::assertSame(self::withoutExportTime(trim($stdout['stdout'])), self::withoutExportTime(trim($written)), 'stdout and file carry the same export');
+    }
+
+    /**
+     * The only time-dependent part of any export: `"plugin": {"date": "Thu, 01 Oct 2026 04:33:37 +0000"}` in the
+     * WordPress Redirection JSON. Replaced by a fixed text, after checking that it is a date.
+     */
+    private static function withoutExportTime(string $export): string
+    {
+        return (string) preg_replace_callback(
+            '/"date": "([^"]*)"/',
+            static function (array $m): string {
+                self::assertNotFalse(DateTimeImmutable::createFromFormat('D, d M Y H:i:s O', $m[1]), 'the export date is a date: ' . $m[1]);
+
+                return '"date": "<time of the export>"';
+            },
+            $export,
+        );
+    }
+
+    public function testTwoExportsInDifferentSecondsDifferOnlyInTheWordpressHeaderTime(): void
+    {
+        $this->rules([['id' => 'e1', 'source' => '/e1', 'target' => '/x', 'status' => 301]]);
+
+        $first = $this->cli(['export', '--format=wordpress_json'])['stdout'];
+        sleep(1);
+        $second = $this->cli(['export', '--format=wordpress_json'])['stdout'];
+
+        self::assertNotSame($first, $second, 'the header carries the time of the export');
+        self::assertSame(self::withoutExportTime($first), self::withoutExportTime($second));
+        foreach (['csv', 'json', 'yaml', 'grav_site', 'htaccess', 'nginx', 'wordpress_csv', 'netlify'] as $format) {
+            self::assertSame($this->cli(['export', '--format=' . $format])['stdout'], $this->cli(['export', '--format=' . $format])['stdout'], $format . ' does not depend on the time');
+        }
     }
 
     public function testExportCanBeNarrowedToEnabledRulesAndOneGroup(): void

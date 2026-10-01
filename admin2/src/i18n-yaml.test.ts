@@ -82,3 +82,43 @@ describe('languages.yaml', () => {
     }
   });
 });
+
+/**
+ * Grav parses its YAML with the libyaml extension when the server has it (YamlFormatter::decode(), "native"), and
+ * libyaml follows YAML 1.1: a bare `YES:` key is the key 1, a bare `NO:` the key 0, a bare value `Off` is false. The
+ * Symfony parser Grav falls back to does not do that, so a site without libyaml never shows it: on a server with
+ * libyaml the German tester page showed COMMON.YES in English, and the blueprint's "Off" option had no label. Every file the plugin ships must read the same under both versions of the language.
+ */
+describe('shipped YAML files', () => {
+  const files = ['languages.yaml', 'blueprints.yaml', 'redirect-manager.yaml', ...readdirSync(join(pluginRoot, 'config')).filter((f) => f.endsWith('.yaml')).map((f) => join('config', f))];
+
+  /** every difference between two parses, as "path: value 1.2 vs value 1.1" */
+  function differences(a: unknown, b: unknown, path = ''): string[] {
+    if (a && b && typeof a === 'object' && typeof b === 'object') {
+      const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+      return [...keys].flatMap((k) => {
+        const here = path ? `${path}.${k}` : k;
+        if (!(k in b)) return [`${here}: only in YAML 1.2`];
+        if (!(k in a)) return [`${here}: only in YAML 1.1`];
+        return differences((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], here);
+      });
+    }
+    return a === b ? [] : [`${path}: ${JSON.stringify(a)} in YAML 1.2, ${JSON.stringify(b)} in YAML 1.1`];
+  }
+
+  it.each(files)('%s reads the same under YAML 1.1 (libyaml) and 1.2 (Symfony)', (file) => {
+    const source = readFileSync(join(pluginRoot, file), 'utf8');
+    expect(differences(YAML.parse(source, { version: '1.2' }), YAML.parse(source, { version: '1.1' }))).toEqual([]);
+  });
+
+  it('the differences are found when a key or value is a YAML 1.1 word', () => {
+    const source = 'UI:\n  COMMON:\n    NO: Nein\n    YES: Ja\n  OPTION: Off\n  FINE: "Off"\n';
+    expect(differences(YAML.parse(source, { version: '1.2' }), YAML.parse(source, { version: '1.1' }))).toEqual([
+      'UI.COMMON.NO: only in YAML 1.2',
+      'UI.COMMON.YES: only in YAML 1.2',
+      'UI.COMMON.false: only in YAML 1.1',
+      'UI.COMMON.true: only in YAML 1.1',
+      'UI.OPTION: "Off" in YAML 1.2, false in YAML 1.1',
+    ]);
+  });
+});

@@ -122,7 +122,12 @@ export interface Translator {
   locale(): string;
   dir(): 'ltr' | 'rtl';
   subscribe(fn: () => void): () => void;
+  /** Changes whenever the host's answers for a few probe keys or its locale change, see watchDictionary(). */
+  signature(): string;
 }
+
+/** Keys whose host text tells whether the plugin's dictionary is there and which one: one per area, all always shown. */
+const PROBE_KEYS = ['TAB.RULES', 'COMMON.YES', 'COMMON.CANCEL', 'TESTER.RUN'];
 
 export function createTranslator(
   fallback: Record<string, string>,
@@ -160,6 +165,10 @@ export function createTranslator(
     has: (key) => key in fallback || rawHas(key),
     locale: () => getHost()?.locale ?? (typeof navigator !== 'undefined' ? navigator.language : 'en'),
     dir: () => getHost()?.dir ?? (typeof document !== 'undefined' && document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'),
+    signature() {
+      const h = getHost();
+      return [h?.locale ?? '', ...PROBE_KEYS.map((k) => this.hostText(fullKey(k)) ?? '')].join('\u0001');
+    },
     subscribe(fn) {
       const h = getHost();
       if (h && typeof h.subscribe === 'function') {
@@ -171,5 +180,35 @@ export function createTranslator(
       }
       return () => {};
     },
+  };
+}
+
+export interface WatchOptions {
+  /** how often to look, in ms */
+  intervalMs?: number;
+  /** how long to keep looking, in ms: the dictionary arrives while the page starts, not later */
+  maxMs?: number;
+}
+
+/**
+ * Calls `onChange` when the host's dictionary changes without the host saying so.
+ *
+ * Admin 2 tells subscribers about a new *language* only. When its dictionary for the current language arrives or is
+ * replaced (a cached language code, a prefix load, a fresher checksum) nobody is notified, and every text the page
+ * rendered before keeps what it had. So for the first seconds the translator's signature is compared on a timer;
+ * a difference means "render again". Returns a function that stops the watch.
+ */
+export function watchDictionary(translator: Translator, onChange: () => void, { intervalMs = 200, maxMs = 15_000 }: WatchOptions = {}): () => void {
+  let last = translator.signature();
+  const timer = setInterval(() => {
+    const now = translator.signature();
+    if (now === last) return;
+    last = now;
+    onChange();
+  }, intervalMs);
+  const stop = setTimeout(() => clearInterval(timer), maxMs);
+  return () => {
+    clearInterval(timer);
+    clearTimeout(stop);
   };
 }

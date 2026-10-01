@@ -1,5 +1,5 @@
 /** Reactive wrapper: components call `t(...)` and re-render on language change. */
-import { createTranslator, type Params } from './i18n';
+import { createTranslator, watchDictionary, type Params } from './i18n';
 
 /** English fallback strings; each entry registers only the areas it needs (keeps the widget small). */
 const fallback: Record<string, string> = {};
@@ -13,9 +13,19 @@ let version = $state(0);
 let unsubscribe: (() => void) | null = null;
 let users = 0;
 
-/** Called by the entry elements; keeps one host subscription for all mounted apps. */
+/**
+ * Called by the entry elements; keeps one host subscription for all mounted apps. The host announces a language
+ * change; a dictionary that arrives for the current language is found by watchDictionary().
+ */
 export function watchLocale(): () => void {
-  if (users++ === 0) unsubscribe = translator.subscribe(() => version++);
+  if (users++ === 0) {
+    const off = translator.subscribe(() => version++);
+    const stop = watchDictionary(translator, () => version++);
+    unsubscribe = () => {
+      off();
+      stop();
+    };
+  }
   return () => {
     if (--users === 0) {
       unsubscribe?.();

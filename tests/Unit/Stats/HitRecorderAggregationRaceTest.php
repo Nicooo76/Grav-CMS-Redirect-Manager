@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Grav\Plugin\RedirectManager\Stats\HitRecorder;
 use Grav\Plugin\RedirectManager\Stats\StatsStore;
 use Grav\Plugin\RedirectManager\Tests\Unit\NotFound\Support\TempDirTrait;
+use Grav\Plugin\RedirectManager\Tests\Unit\Support\ChildPhp;
 use Grav\Plugin\RedirectManager\Util\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -74,6 +75,52 @@ final class HitRecorderAggregationRaceTest extends TestCase
         self::assertSame([], $this->leftovers());
     }
 
+    public function testTheAggregatorSealsTheRenamedFileForWritersThatStillHoldIt(): void
+    {
+        mkdir($this->hitsDir, 0775, true);
+        $live = $this->hitsDir . '/2026-09-29.log';
+        file_put_contents($live, "x\n");
+        $writer = fopen($live, 'ab');
+        self::assertIsResource($writer);
+        self::assertSame(0, fstat($writer)['mode'] & StatsStore::SEAL_BIT, 'a hit log is not sealed');
+
+        self::assertSame(1, $this->store->aggregate());
+
+        self::assertNotSame(0, fstat($writer)['mode'] & StatsStore::SEAL_BIT, 'the writer sees through its handle that the file was taken');
+        self::assertSame([], $this->leftovers(), 'the file itself is gone');
+        fclose($writer);
+    }
+
+    public function testAWriterThatStillFindsThePathPointingAtTheTakenFileStartsOver(): void
+    {
+        // The path check alone is not enough: right after the aggregator renamed, read and deleted the file, a lookup
+        // of the path can still answer with that file. A hard link brings it back at the path, which is what such a
+        // lookup shows the writer; only the seal on the file tells the writer that its hit would be lost there.
+        mkdir($this->hitsDir, 0775, true);
+        $live = $this->hitsDir . '/2026-09-29.log';
+        file_put_contents($live, "x\nx\n");
+        $stale = $this->tmp . '/stale.log';
+        $merged = 0;
+        $recorder = new HitRecorder($this->hitsDir, $this->clock, function (int $attempt) use (&$merged, $live, $stale): void {
+            if ($attempt === 0) {
+                self::assertTrue(link($live, $stale));
+                $merged += $this->store->aggregate();
+                self::assertTrue(rename($stale, $live), 'the old file is at the path again');
+            } elseif ($attempt === 1) {
+                // the second attempt opened the old file once more and was refused again; now the path is right
+                self::assertTrue(unlink($live));
+            }
+        });
+
+        $recorder->record('a');
+        $merged += $this->store->aggregate();
+
+        self::assertSame(3, $merged);
+        self::assertSame(2, $this->store->forRule('x')->total, 'merged once, not again from the old file');
+        self::assertSame(1, $this->store->forRule('a')->total);
+        self::assertSame([], $this->leftovers());
+    }
+
     public function testAHitSurvivesAnAggregationAfterEveryOpen(): void
     {
         // The hot aggregator: it renames the file the writer just (re)created on each of 49 attempts.
@@ -112,7 +159,7 @@ final class HitRecorderAggregationRaceTest extends TestCase
             echo (new Grav\Plugin\RedirectManager\Stats\StatsStore($argv[2], $argv[3], $clock))->aggregate();
             PHP;
         $proc = proc_open(
-            [PHP_BINARY, '-r', $code, '--', dirname(__DIR__, 3), $this->tmp . '/data/stats.json', $this->hitsDir],
+            ChildPhp::command('-r', $code, '--', dirname(__DIR__, 3), $this->tmp . '/data/stats.json', $this->hitsDir),
             [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']],
             $pipes,
         );

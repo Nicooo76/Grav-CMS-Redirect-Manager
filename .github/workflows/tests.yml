@@ -17,22 +17,27 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Runners are pinned to ubuntu-24.04: "ubuntu-latest" moves to Ubuntu 26 on 2026-10-19, and the PHP, Chromium and system
+# libraries of the jobs below are what the tests were written against (docs/TESTING.md, "CI").
 env:
   GRAV_VERSION: "2.2.2"
   PHP_EXTENSIONS: mbstring, intl, pdo_sqlite, sqlite3, curl, zip, gd, opcache, dom, simplexml, fileinfo
-  PHP_INI: opcache.enable_cli=1, opcache.jit=off, memory_limit=1G
+  # The JIT is switched off completely ("disable"; "off" still initialises it): with pcov loaded (the coverage job)
+  # PHP prints "JIT is incompatible with third party extensions that override zend_execute_ex()" on stderr of every
+  # process it starts, which the concurrency tests read as a worker error and composer prints into its output.
+  PHP_INI: opcache.enable_cli=1, opcache.jit=disable, opcache.jit_buffer_size=0, memory_limit=1G
 
 jobs:
   php:
     name: PHP ${{ matrix.php }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         php: ["8.3", "8.4", "8.5"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -48,7 +53,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Composer cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: composer-${{ runner.os }}-php${{ matrix.php }}-${{ hashFiles('composer.lock') }}
@@ -60,13 +65,16 @@ jobs:
       - name: Validate composer.json
         run: composer validate --strict
 
+      # PHP CS Fixer recommends running on the lowest PHP the project supports and warns on every newer one; its rules
+      # do not depend on the PHP version, so the 8.4 and 8.5 jobs skip it.
       - name: Code style
+        if: matrix.php == '8.3'
         run: composer cs
 
       # PHPStan scans the Grav sources of the test site (phpstan.neon.dist: scanDirectories), and the integration
       # suite runs against it, so the site is set up before both.
       - name: Grav test site cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .grav
           key: grav-${{ env.GRAV_VERSION }}-php${{ matrix.php }}-${{ hashFiles('scripts/setup-test-site.sh') }}
@@ -90,12 +98,12 @@ jobs:
 
   ui:
     name: Admin 2 bundles
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -126,10 +134,10 @@ jobs:
 
   playwright:
     name: Playwright
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # tests/ui is added separately; without a config this job passes without doing anything.
       - name: Look for tests/ui/playwright.config.ts
@@ -142,19 +150,22 @@ jobs:
             echo "No tests/ui/playwright.config.ts, nothing to run."
           fi
 
+      # libyaml (the yaml extension) is what a Grav server usually has, and Grav then parses languages.yaml with it, as YAML
+      # 1.1: bare YES/NO keys become booleans. The German tests need the site to run that way, so it is named here
+      # rather than left to the image.
       - name: Set up PHP
         if: steps.ui.outputs.run == 'true'
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.3"
-          extensions: ${{ env.PHP_EXTENSIONS }}
+          extensions: ${{ env.PHP_EXTENSIONS }}, yaml
           ini-values: ${{ env.PHP_INI }}
           coverage: none
           tools: composer:v2
 
       - name: Set up Node
         if: steps.ui.outputs.run == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -169,7 +180,7 @@ jobs:
 
       - name: Grav test site cache
         if: steps.ui.outputs.run == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .grav
           key: grav-${{ env.GRAV_VERSION }}-php8.3-${{ hashFiles('scripts/setup-test-site.sh') }}
@@ -200,7 +211,7 @@ jobs:
 
       - name: Upload the Linux baselines
         if: steps.ui.outputs.run == 'true' && inputs.visual_baselines
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-baselines-linux
           path: tests/ui/specs/__screenshots__/linux
@@ -209,7 +220,7 @@ jobs:
 
       - name: Upload the report
         if: failure() && steps.ui.outputs.run == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
@@ -220,10 +231,10 @@ jobs:
 
   release-check:
     name: Release ZIP
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -234,7 +245,7 @@ jobs:
           coverage: none
           tools: composer:v2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -244,7 +255,7 @@ jobs:
         run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Grav ZIP cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .grav/grav-admin-v${{ env.GRAV_VERSION }}.zip
           key: grav-zip-${{ env.GRAV_VERSION }}
@@ -265,7 +276,7 @@ jobs:
       - name: Test the ZIP (bin/gpm direct-install)
         run: scripts/test-release.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: grav-plugin-redirect-manager-${{ steps.build.outputs.version }}
           path: dist/grav-plugin-redirect-manager-${{ steps.build.outputs.version }}.zip*

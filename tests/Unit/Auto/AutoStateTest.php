@@ -9,6 +9,7 @@ use Grav\Plugin\RedirectManager\Auto\AutoState;
 use Grav\Plugin\RedirectManager\Auto\PageNode;
 use Grav\Plugin\RedirectManager\Auto\PageSnapshot;
 use Grav\Plugin\RedirectManager\Tests\Unit\NotFound\Support\TempDirTrait;
+use Grav\Plugin\RedirectManager\Tests\Unit\Support\ChildPhp;
 use Grav\Plugin\RedirectManager\Util\FixedClock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -165,7 +166,7 @@ for ($i = 0; $i < 25; $i++) { $state->addUnseen([$argv[2] . $i]); }
 ');
         $procs = [];
         foreach (['a', 'b', 'c'] as $prefix) {
-            $procs[] = proc_open([PHP_BINARY, $script, $file, $prefix], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+            $procs[] = proc_open(ChildPhp::command($script, $file, $prefix), [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
         }
         foreach ($procs as $proc) {
             proc_close($proc);

@@ -113,6 +113,8 @@ final class TestSite
 
         return $flags = [
             '-d', 'auto_prepend_file=' . $root . '/tests/Support/coverage-prepend.php',
+            // pcov overrides zend_execute_ex(); a configured JIT would then warn on stderr of every child.
+            '-d', 'opcache.jit=disable',
             '-d', 'pcov.enabled=1',
             '-d', 'pcov.directory=' . $root . '/classes',
         ];

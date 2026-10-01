@@ -1,5 +1,5 @@
 # v1.0.0
-## 09/29/2026
+## 10/01/2026
 
 1. [](#new)
     * First release, for Grav 2.1.5 and newer. Developed and tested on Grav 2.2.2 with PHP 8.3, 8.4 and 8.5.

@@ -339,7 +339,7 @@ All seven were open when the audit began. `275530f` fixes them and replaces the 
 | J-6b | CS Fixer PSR-12 | done | `.php-cs-fixer.dist.php` (`@PSR12`, `declare_strict_types`, ordered imports; covers `classes`, `cli`, `tests`); auditor: 0 of 436 files | |
 | J-6c | No deprecations under PHP 8.4 | done | `phpunit.xml.dist` (`failOnDeprecation`, `failOnWarning`, `failOnRisky`, `error_reporting -1`); unit suite on PHP 8.4.26 at HEAD: no deprecation, no warning | Integration and Playwright were not run under 8.4 by the auditor. |
 | J-7 | `composer test` (cs, stan, unit) green | done | auditor at HEAD: cs OK, stan OK, unit 4304 OK on PHP 8.3 and 8.4 (the earlier NF-1 failure is fixed) | NF-1 fixed in `275530f`. At HEAD: php-cs-fixer, PHPStan and the unit suite are green on PHP 8.3 and 8.4. |
-| J-8 | CI green on PHP 8.3 and 8.4 | partial | `.github/workflows/tests.yml` (jobs `php` matrix 8.3/8.4/8.5: composer validate, cs, Grav test site, PHPStan, coverage on 8.3 or unit on others, integration; `ui`: Vitest, bundle build, committed-bundle check; `playwright`; `release-check`: build ZIP, `--manual` and gpm install tests) and `release.yml` | The workflows cannot run yet: no GitHub repository. Auditor executed the steps locally: `composer validate --strict` OK, php-cs-fixer OK (8.3, 8.4), PHPStan OK (8.3, 8.4), unit 4304 tests OK (8.3, 8.4; 4302 with 1 failure, NF-1, before `275530f`), coverage 96.76 % (8.5, the only PHP with pcov here; the workflow measures on 8.3), Vitest 224 OK, release test OK (gpm 8.4, manual 8.3), integration sample OK (8.3). The workflow YAML itself was never executed (no `act`, no runner). |
+| J-8 | CI green on PHP 8.3 and 8.4 | done | GitHub Actions run [36821751896](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/actions/runs/36821751896) on 2026-10-01 (commit `2c35e47`): jobs PHP 8.3 (cs, PHPStan, unit with coverage gate), PHP 8.4, PHP 8.5 (unit, integration), Playwright (274 passed incl. 14 Linux visual comparisons), Admin 2 bundles, Release ZIP: all green. | The first run (36815285993) failed on CI-only issues, all fixed in `36dd81c`: JIT warning in test children, export timestamp test, YAML 1.1 keys in languages.yaml under libyaml. |
 | J-9 | `docs/FEATURE-CHECKLIST.md` with status and test per point | done | this file | Written by the independent audit. |
 
 ### K. Deliverables and acceptance criteria
@@ -347,7 +347,7 @@ All seven were open when the audit began. `275530f` fixes them and replaces the 
 | ID | Requirement | Status | Evidence | Note |
 |---|---|---|---|---|
 | K-1 | Repository layout: `blueprints.yaml`, `redirect-manager.yaml`, `redirect-manager.php`, `classes/`, `templates/`, `languages.yaml`, `assets/` with frontend bundle, `cli/`, `tests/`, `docs/`, `CHANGELOG.md`, `LICENSE`, `README.md` | done | all present; `U:PluginLayoutTest::testTheOnlyRootYamlFilesAreTheOnesGpmAccepts`, `testPermissionsAndMcpManifestLiveBelowConfig`; `scripts/build-release.sh` step 5 checks the ZIP layout; `templates/redirect-manager/gone.html.twig` and `unavailable.html.twig` | Deviations: the frontend bundle is in `admin-next/pages/` and `admin-next/widgets/`, not `assets/` (the API plugin loads `admin-next/pages/{slug}.js`, `GpmController.php:1738,1753`; the local `assets/` directory is empty and untracked). `permissions.yaml` and `mcp.yaml` are in `config/` (D-024). Row is `done` because the substitutes are tested; recorded as a deviation in D-028. |
-| K-2 | GitHub Actions: tests, PHPStan, release ZIP | partial | `.github/workflows/tests.yml` (tests and PHPStan inside job `php`), `.github/workflows/release.yml` (tag `v*`, tag must equal `blueprints.yaml` version, notes from `CHANGELOG.md`, builds and attaches the ZIP); `scripts/changelog-section.sh` | Not runnable without a repository (J-8). |
+| K-2 | GitHub Actions: tests, PHPStan, release ZIP | done | `.github/workflows/tests.yml` and `.github/workflows/release.yml`; green run [36821751896](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/actions/runs/36821751896); the Release ZIP job builds and install-tests `grav-plugin-redirect-manager-1.0.0.zip` (artifact). | `release.yml` runs on a `v*` tag and has not been triggered yet (no tag pushed). |
 | K-3 | Version 1.0.0, SemVer, CHANGELOG in Grav format | done | `blueprints.yaml` `version: 1.0.0`; `CHANGELOG.md` (`# v1.0.0`, `## 09/29/2026`, numbered `[](#new)` list, the format the GPM listing reads); `scripts/build-release.sh` step 1 refuses a version that is not SemVer, differs from `blueprints.yaml` or has no CHANGELOG section; `I:ReleaseTest` | |
 | K-4 | README: screenshots light and dark of every admin page, features, install (GPM and manual), configuration, import guide per format including migration from 1.7, CLI, API reference, MCP, privacy, performance figures, limits, FAQ, contributing | done | `README.md` sections: Screenshots (line 31), Features (55), Requirements, Installation (130, GPM direct install and manual), Configuration reference (178), Import and export (343) plus `docs/IMPORT-FORMATS.md` (per format), Migrating from Grav 1.7 (364), CLI reference (381), REST API (442) plus `docs/API.md`, MCP tools (475), Events, Webhooks, Twig, Privacy (624), Performance (667), Security, Known limits (726), FAQ (742), Contributing (788), Deutsch (822); `docs/screenshots/` has 20 files (10 screens x light and dark: rules, editor, 404, suggestions, tester, import, export, settings, dashboard widget, page editor panel), all referenced files exist | Documents, no test. "Known limits" lacks the notification limit (F-13f) and the log-only SQLite backend (I-10). |
 | K-A1 | Acceptance: all match types, status codes and conditions proven in the frontend by integration test | done | C-1 to C-6, D-1 to D-5 done over HTTP | Scheme, referer and all header operators now go over HTTP (C-5c, C-5d, C-5e, I-28). |
@@ -356,7 +356,7 @@ All seven were open when the audit began. `275530f` fixes them and replaces the 
 | K-A4 | Acceptance: Admin UI in Admin 2, light and dark, no axe violations, bilingual | done | G-1, G-2, G-20, A-7 (all done); `P:german.spec.ts` "axe finds nothing serious in German ..."; `P:host-tokens.spec.ts` (light and dark) | KI-6 and KI-2 are fixed. Admin 2's blueprint renderer on the settings screen stays out of the axe scan (G-20). |
 | K-A5 | Acceptance: CLI, REST, MCP tested | done | H-3 to H-6 | H-4d and I-15 are closed. |
 | K-A6 | Acceptance: below 1 ms at 10,000 rules by benchmark | done | I-7 | |
-| K-A7 | Acceptance: PHPStan 8, PSR-12, at least 90 % coverage, CI green on 8.3 and 8.4 | partial | J-6a, J-6b, J-1, J-7 done; J-8 partial | Only the CI run itself is open (no repository). |
+| K-A7 | Acceptance: PHPStan 8, PSR-12, at least 90 % coverage, CI green on 8.3 and 8.4 | done | J-6a, J-6b, J-1, J-7, J-8; CI run [36821751896](https://github.com/Nicooo76/Grav-CMS-Redirect-Manager/actions/runs/36821751896). | |
 | K-A8 | Acceptance: GRAV2-NOTES, DECISIONS and FEATURE-CHECKLIST complete | done | `docs/GRAV2-NOTES.md`, `docs/DECISIONS.md`, this file | A-4 is closed (D-026 to D-030). The other rows of this file still list open test gaps; that is a statement about tests, not about these documents. |
 | K-A9 | Acceptance: fresh install from ZIP without log errors, uninstall likewise | done | J-4i (auditor re-ran it) | |
 | K-A10 | Documenting what is not possible, with a pointer to the Grav or Admin 2 source and the next best solution | done | H-4a (D-026), H-5c (D-003), H-5d (D-012), H-6b (D-013), H-6c (D-027), K-1 (D-028), I-10 (D-029), F-13f (D-030): each with the Grav, API plugin or Admin 2 source and the substitute; README "Known limits" lists the ones a user meets | Closed. The inaccurate `list` rationale is fixed in README, DECISIONS and the help text of `cli/RulesCommand.php` (gap 27). |
@@ -365,8 +365,8 @@ All seven were open when the audit began. `275530f` fixes them and replaces the 
 
 | Status | Rows |
 |---|---:|
-| `done` | 228 |
-| `partial` | 8 |
+| `done` | 231 |
+| `partial` | 5 |
 | `not possible in Grav 2` | 4 |
 | `missing` | 0 |
 | **Total** | **240** |
@@ -384,8 +384,8 @@ By section:
 | G Admin 2 interface | 38 | 1 | 0 | 0 |
 | H Import, export, CLI, API, MCP, events, webhooks, Twig | 31 | 0 | 4 | 0 |
 | I Architecture, performance, security, compatibility | 26 | 3 | 0 | 0 |
-| J Tests | 45 | 1 | 0 | 0 |
-| K Deliverables and acceptance criteria | 12 | 2 | 0 | 0 |
+| J Tests | 46 | 0 | 0 | 0 |
+| K Deliverables and acceptance criteria | 14 | 0 | 0 | 0 |
 
 A row is one testable requirement or sub-item of the brief (`C-5c`, `H-1d`, `J-2g`, ...). Known issues KI-1 to KI-7 were fixed during the audit and are folded into their rows. NF-2 to NF-4 are findings, not rows; they are covered by gaps 27 (NF-2), 34 (NF-3) and 8 (NF-4); NF-1 is fixed.
 
